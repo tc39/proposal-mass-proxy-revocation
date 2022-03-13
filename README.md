@@ -1,60 +1,171 @@
-# template-for-proposals
+# Proxy Revocation By Controllers
 
-A repository template for ECMAScript proposals.
+## Status
 
-## Before creating a proposal
+- Champion(s): Bradley Farias
+- Author(s): Alexander J. Vincent, Bradley Farias
+- Stage: -1
 
-Please ensure the following:
-  1. You have read the [process document](https://tc39.github.io/process-document/)
-  1. You have reviewed the [existing proposals](https://github.com/tc39/proposals/)
-  1. You are aware that your proposal requires being a member of TC39, or locating a TC39 delegate to "champion" your proposal
+## Motivation
 
-## Create your proposal repo
+Membranes, which use Proxy and WeakMap to separate one object graph (think "Realm") from others, could have hundreds or thousands of proxies in each object graph.  In revoking an object graph, a membrane must revoke all of these proxies at once, and all proxies in other object graphs to objects in that object graph.
 
-Follow these steps:
-  1.  Click the green ["use this template"](https://github.com/tc39/template-for-proposals/generate) button in the repo header. (Note: Do not fork this repo in GitHub's web interface, as that will later prevent transfer into the TC39 organization)
-  1.  Go to your repo settings “Options” page, under “GitHub Pages”, and set the source to the **main branch** under the root (and click Save, if it does not autosave this setting)
-      1. check "Enforce HTTPS"
-      1. On "Options", under "Features", Ensure "Issues" is checked, and disable "Wiki", and "Projects" (unless you intend to use Projects)
-      1. Under "Merge button", check "automatically delete head branches"
-<!--
-  1.  Avoid merge conflicts with build process output files by running:
-      ```sh
-      git config --local --add merge.output.driver true
-      git config --local --add merge.output.driver true
-      ```
-  1.  Add a post-rewrite git hook to auto-rebuild the output on every commit:
-      ```sh
-      cp hooks/post-rewrite .git/hooks/post-rewrite
-      chmod +x .git/hooks/post-rewrite
-      ```
--->
-  3.  ["How to write a good explainer"][explainer] explains how to make a good first impression.
+We propose a RevocationController class, available via a static maker function on Proxy, and which developers can pass instances into Proxy.revocable via a third argument.  RevocationController draws inspiration directly from the Document Object Model's [AbortController](https://dom.spec.whatwg.org/#interface-abortcontroller).
 
-      > Each TC39 proposal should have a `README.md` file which explains the purpose
-      > of the proposal and its shape at a high level.
-      >
-      > ...
-      >
-      > The rest of this page can be used as a template ...
+## Use cases
 
-      Your explainer can point readers to the `index.html` generated from `spec.emu`
-      via markdown like
+### Membranes revoking entire object graphs
 
-      ```markdown
-      You can browse the [ecmarkup output](https://ACCOUNT.github.io/PROJECT/)
-      or browse the [source](https://github.com/ACCOUNT/PROJECT/blob/HEAD/spec.emu).
-      ```
+In April 2021, Mark Miller proposed an idea for Realms, [adding a .revoke() method](https://github.com/tc39/proposal-shadowrealm/issues/299).  The idea there is you could have all the proxies in a Realm revoked at once.  Everyone who’s responded generally thinks it’s a great idea, but not necessary for the MVP of Realms.
 
-      where *ACCOUNT* and *PROJECT* are the first two path elements in your project's Github URL.
-      For example, for github.com/**tc39**/**template-for-proposals**, *ACCOUNT* is "tc39"
-      and *PROJECT* is "template-for-proposals".
+In the GitHub issue, Alex Vincent realized that this improvement didn’t go far enough.  Consider the following where each plane is a Realm, raw objects are spheres, proxies are hemispheres, and the vertical cylinders represent connections between proxies and their objects.  (This is a geometric model of a membrane.)
 
+Figure 1
 
-## Maintain your proposal repo
+![Three realms, visualized](ThreeRealms.png)
 
-  1. Make your changes to `spec.emu` (ecmarkup uses HTML syntax, but is not HTML, so I strongly suggest not naming it ".html")
-  1. Any commit that makes meaningful changes to the spec, should run `npm run build` and commit the resulting output.
-  1. Whenever you update `ecmarkup`, run `npm run build` and commit any changes that come from that dependency.
+Yellow.revoke(), as Mark envisioned it, would directly kill the &lt;html&gt; and &lt;body&gt; proxies in the Yellow realm, but it wouldn’t directly kill the "onload" proxies in the Blue and Green realms.  These proxies would only find out when they tried to access the Yellow “onload” object and threw exceptions.  They’re dead and don’t know it.  The client code is responsible for handling these exceptions.
 
-  [explainer]: https://github.com/tc39/how-we-work/blob/HEAD/explainer.md
+```javascript
+const membrane = new Membrane;
+
+const green = new ShadowRealm;
+const yellow = new ShadowRealm;
+
+yellow.car = new Car;
+
+// Setting up the initial reference to yellow.car in the green realm:
+membrane.bindProxyForObject(yellow, green, "car");
+
+// In the membrane, this runs:
+{
+  const yellowGreenController = Proxy.revocationController(yellow, green);
+  this.cacheRevokeController(yellowGreenController, [yellow, green]);
+
+  const shadowTarget = {};
+  const { proxy } = Proxy.revocable(shadowTarget, membraneProxyHandler, { signal: yellowGreenController.signal });
+
+  green.car = proxy;
+
+  this.bindOneToOne(yellow, yellow.car, green, proxy);
+}
+
+// In the green realm, this code runs.
+green.car.driver = new Driver;
+
+// In the membrane, this runs:
+{
+  const yellowGreenController = this.getRevokeController(yellow, green); // gets yellowGreenController from earlier
+
+  const shadowTarget = {};
+  const { proxy } = Proxy.revocable(shadowTarget, membraneProxyHandler, { signal: yellowGreenController.signal });
+  yellow.car.driver = proxy;
+
+  this.bindOneToOne(green, green.car.driver, yellow, proxy);
+}
+
+membrane.revoke(yellow);
+
+// In the membrane, this runs:
+{
+  const controllers = this.getRevokeControllers(yellow); // returns [yellowGreenController]
+  controllers.forEach(c => c.revoke());
+  // this triggers yellowGreenController.signal, which knocks out green.car and yellow.car.driver
+}
+```
+
+Note we are not specifying the membrane API here.  The methods for the membrane are only illustrative.
+
+One particular benefit of this is returning revocation management (and thus, garbage collection of proxies) back to the JavaScript engine.  The need to explicitly generate a revoker function becomes obsolete, but for backwards compatibility, we'd preserve it.
+
+### Observing revocation
+
+Suppose you wish to have a callback function execute when a RevocationController's revoke() method fires.
+
+```javascript
+const yellowGreenController = Proxy.revocationController(yellow, green);
+const cache = new WeakMap;
+
+function library(obj, {signal}) {
+  let { key } = obj;
+  cache.set(key, obj);
+  signal.observe(() => cache.delete(key));
+}
+
+library({}, { signal: yellowGreenController.signal });
+```
+
+In this case, when `yellowGreenController.revoke()` fires, this sets up a call to run the observer, and thus remove the key from the cache.  If the observer throws an exception, the signal swallows that exception.  We impose no restriction on the number of observers a signal may have, nor do we (at this time) specify the behavior of signal.observe() (whether it stores entries in a Set or a simple array, for example).
+
+## Description
+
+*Developer-friendly documentation for how to use the feature*
+
+`frobnicate(object)` returns the frobnication of object.
+
+## Comparison
+
+*A comparison across various related programming languages and/or libraries. If this is the first sort of language or library to do this thing, explain why that is the case. If this is a standard library feature, a comparison across the JavaScript ecosystem would be good; if it's a syntax feature, that might not be practical, and comparisons may be limited to other programming languages.*
+
+There is prior art for passing AbortSignals across Realms.  (Bradley, can you find that for reference here?)
+
+These npm modules do something like the proposal:
+- [frobnicate-2018](https://www.npmjs.com/package/frobnicate-2018)
+- [B](link)
+- [C](link)
+
+frobnicate-2018 is weird because xyz, whereas B is weird because jkl, so we take a version of the approach in C, modified by qrs.
+
+The standard libraries of these programming languages includes related functionality:
+- APL (links to the relevant documentation for each of these)
+- PostScript
+- Self
+- XSLT
+- Emacs Lisp
+
+Our approach is pretty similar to the Emacs Lisp approach, and it's clear from a manual analysis of billions of Stack Overflow posts that this is the most straightforward to ordinary developers.
+
+## Implementations
+
+### Polyfill/transpiler implementations
+
+*A JavaScript implementation of the proposal, ideally packaged in a way that enables easy, realistic experimentation. See [implement.md](https://github.com/tc39/how-we-work/blob/master/implement.md) for details on creating useful prototype implementations.*
+
+You can try out an implementation of this proposal in the npm package [frobnicate](https://www.npmjs.com/package/frobnicate). Note, this package has semver major version 0 and is subject to change.
+
+### Native implementations
+
+*For Stage 3+ proposals, and occasionally earlier, it is helpful to link to the implementation status of full, end-to-end JavaScript engines. Filing these issues before Stage 3 is somewhat unnecessary, though, as it's not very actionable.*
+
+- [V8]() (*Links to tracking issues in each JS engine*)
+- [JSC]()
+- [SpiderMonkey]()
+- ...
+
+## Q&A
+
+*Frequently asked questions, or questions you think might be asked. Issues on the issue tracker or questions from past reviews can be a good source for these.*
+
+**Q**: Why does this need to be built-in, instead of being implemented in JavaScript?
+
+**A**: (1) We want to hand actual management of the proxies back to the JavaScript engine.  Membranes storing hundreds of revokers and then revoking them synchronously is painful.  (2) We believe this design will work better for compartments.
+
+**Q**: Why have a third argument?
+
+**A**: We believe this is the simplest way to maintain backwards compatibility and add the feature we are requesting.  The alternative is defining another static maker function on Proxy, which we would prefer not to do.  We are also aware of the importance of shaping this third-argument API correctly up front.
+
+**Q**: Should `new Proxy` get a third argument as well?
+
+**A**: Maybe.  We're undecided on this.  In favor would be consistency.  Against would be that proxies created via `new Proxy` do not have a revocation mechanism.
+
+**Q**: Consider an outer realm containing an inner realm, and the outer realm is revoked.  Does this trigger the RevocationController's signal for the inner realm?
+
+**A**: To be determined.  We need to flesh out the example code for this case to see whether it really applies or not.  Most likely this involves the controller for the inner realm being held outside both realms.
+
+**Q**: Suppose a `ShadowRealm.prototype.revoke()` method exists.  How would that impact this feature?
+
+**A**: We believe revoking a Realm directly is a good idea.  `ShadowRealm.prototype.revoke()` should synchronously trigger the RevocationControllers' signals for every controller referencing that realm.
+
+**Q**: Is it really necessary to create such a high-level built-in construct, rather than using lower-level primitives?
+
+**A**: Instead of providing a direct `frobnicate` method, we could expose more basic primitives to compose an md5 hash with rot13. However, rot13 was demonstrated to be insecure in 2012 (citation), so exposing it as a primitive could serve as a footgun.
