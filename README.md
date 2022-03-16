@@ -138,7 +138,3 @@ There is prior art for passing AbortSignals across Realms.  See issue #1.
 **Q**: Consider an outer realm containing an inner realm, and the outer realm is revoked.  Does this trigger the RevocationController's signal for the inner realm?
 
 **A**: To be determined.  We need to flesh out the example code for this case to see whether it really applies or not.  Most likely this involves the controller for the inner realm being held outside both realms.
-
-**Q**: Suppose a `ShadowRealm.prototype.revoke()` method exists.  How would that impact this feature?
-
-**A**: We believe revoking a Realm directly is a good idea.  `ShadowRealm.prototype.revoke()` should synchronously trigger the RevocationControllers' signals for every controller referencing that realm.
