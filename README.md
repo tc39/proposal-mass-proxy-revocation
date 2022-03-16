@@ -78,25 +78,6 @@ Note we are not specifying the membrane API here.  The methods for the membrane 
 
 One particular benefit of this is returning revocation management (and thus, garbage collection of proxies) back to the JavaScript engine.  The need to explicitly generate a revoker function becomes obsolete, but for backwards compatibility, we'd preserve it.
 
-### Observing revocation
-
-Suppose you wish to have a callback function execute when a RevocationController's revoke() method fires.
-
-```javascript
-const yellowGreenController = Proxy.revocationController(yellow, green);
-const cache = new WeakMap;
-
-function library(obj, {signal}) {
-  let { key } = obj;
-  cache.set(key, obj);
-  signal.observe(() => cache.delete(key));
-}
-
-library({}, { signal: yellowGreenController.signal });
-```
-
-In this case, when `yellowGreenController.revoke()` fires, this sets up a call to run the observer, and thus remove the key from the cache.  If the observer throws an exception, the signal swallows that exception.  We impose no restriction on the number of observers a signal may have, nor do we (at this time) specify the behavior of signal.observe() (whether it stores entries in a Set or a simple array, for example).
-
 ### Memory optimizations
 
 If we don't actually create a revoker function per proxy (possibly via `new Proxy` and the third argument), this means less memory allocation and less garbage collection pressure.
@@ -138,3 +119,9 @@ There is prior art for passing AbortSignals across Realms.  See issue #1.
 **Q**: Consider an outer realm containing an inner realm, and the outer realm is revoked.  Does this trigger the RevocationController's signal for the inner realm?
 
 **A**: To be determined.  We need to flesh out the example code for this case to see whether it really applies or not.  Most likely this involves the controller for the inner realm being held outside both realms.
+
+### Out of Scope
+
+#### Observing revocation
+
+This proposal is tailored towards allowing creation of revocable groupings of Proxies, a general signaling mechanism has been the subject of debate at TC39 and we believe this proposal serves its own purpose without an observation mechanism. There is no clear reason why signaling could not be added to the proposed APIs here as a follow on. Adding signaling has a variety of concerns such as re-entrancy and compatibility with other host environment features.
