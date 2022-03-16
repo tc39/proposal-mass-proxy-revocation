@@ -109,7 +109,7 @@ If we don't actually create a revoker function per proxy (possibly via `new Prox
 
 *A comparison across various related programming languages and/or libraries. If this is the first sort of language or library to do this thing, explain why that is the case. If this is a standard library feature, a comparison across the JavaScript ecosystem would be good; if it's a syntax feature, that might not be practical, and comparisons may be limited to other programming languages.*
 
-There is prior art for passing AbortSignals across Realms.  (Bradley, can you find that for reference here?)
+There is prior art for passing AbortSignals across Realms.  See issue #1.
 
 ## Implementations
 
