@@ -2,7 +2,7 @@
 
 ## Status
 
-- Champion(s): Bradley Farias
+- Champion(s): ???
 - Author(s): Alexander J. Vincent, Bradley Farias
 - Stage: -1
 
