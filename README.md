@@ -97,6 +97,10 @@ library({}, { signal: yellowGreenController.signal });
 
 In this case, when `yellowGreenController.revoke()` fires, this sets up a call to run the observer, and thus remove the key from the cache.  If the observer throws an exception, the signal swallows that exception.  We impose no restriction on the number of observers a signal may have, nor do we (at this time) specify the behavior of signal.observe() (whether it stores entries in a Set or a simple array, for example).
 
+### Memory optimizations
+
+If we don't actually create a revoker function per proxy (possibly via `new Proxy` and the third argument), this means less memory allocation and less garbage collection pressure.
+
 ## Description
 
 *Developer-friendly documentation for how to use the feature*
