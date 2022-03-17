@@ -2,7 +2,7 @@
 
 ## Status
 
-- Champion(s): Mark S. Miller. (but all credit goes to Alex and Bradley)
+- Champion(s): Mark S. Miller, Jack Works (all credit goes to Alex and Bradley)
 - Author(s): Alexander J. Vincent, Bradley Farias
 - Stage: 0
 
