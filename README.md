@@ -112,7 +112,7 @@ There is prior art for passing AbortSignals across Realms.  See issue #1.
 
 **A**: We believe this is the simplest way to maintain backwards compatibility and add the feature we are requesting.  The alternative is defining another static maker function on Proxy, which we would prefer not to do.  We are also aware of the importance of shaping this third-argument API correctly up front.
 
-**Q**: Should `new Proxy` get a third argument as well?
+**Q**: Should `new Proxy` get a third argument as well? (#6)
 
 **A**: Maybe.  We're undecided on this.  In favor would be consistency.  Against would be that proxies created via `new Proxy` do not have a revocation mechanism.
 
