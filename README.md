@@ -116,10 +116,6 @@ There is prior art for passing AbortSignals across Realms.  See issue #1.
 
 **A**: Maybe.  We're undecided on this.  In favor would be consistency.  Against would be that proxies created via `new Proxy` do not have a revocation mechanism.
 
-**Q**: Consider an outer realm containing an inner realm, and the outer realm is revoked.  Does this trigger the RevocationController's signal for the inner realm?
-
-**A**: To be determined.  We need to flesh out the example code for this case to see whether it really applies or not.  Most likely this involves the controller for the inner realm being held outside both realms.
-
 ### Out of Scope
 
 #### Observing revocation
