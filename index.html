@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.0.1/styles/base16/solarized-light.min.css"><link rel="stylesheet" href="./spec.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/github.min.css">
 <script src="./spec.js"></script>
-<title>Proposal Title Goes Here</title><script>'use strict';
+<title>Proxy Revocation By Controllers</title><script>'use strict';
 let sdoBox = {
   init() {
     this.$alternativeId = null;
@@ -135,7 +135,7 @@ Search.prototype.loadBiblio = function () {
 };
 
 Search.prototype.documentKeydown = function (e) {
-  if (e.keyCode === 191) {
+  if (e.key === '/') {
     e.preventDefault();
     e.stopPropagation();
     this.triggerSearch();
@@ -190,7 +190,7 @@ function relevance(result) {
     relevance += 2048;
   }
 
-  relevance += Math.max(0, 255 - result.entry.key.length);
+  relevance += Math.max(0, 255 - result.key.length);
 
   return relevance;
 }
@@ -214,20 +214,21 @@ Search.prototype.search = function (searchString) {
   if (/^[\d.]*$/.test(searchString)) {
     results = this.biblio.clauses
       .filter(clause => clause.number.substring(0, searchString.length) === searchString)
-      .map(clause => ({ entry: clause }));
+      .map(clause => ({ key: getKey(clause), entry: clause }));
   } else {
     results = [];
 
     for (let i = 0; i < this.biblio.entries.length; i++) {
       let entry = this.biblio.entries[i];
-      if (!entry.key) {
+      let key = getKey(entry);
+      if (!key) {
         // biblio entries without a key aren't searchable
         continue;
       }
 
-      let match = fuzzysearch(searchString, entry.key);
+      let match = fuzzysearch(searchString, key);
       if (match) {
-        results.push({ entry, match });
+        results.push({ key, entry, match });
       }
     }
 
@@ -276,6 +277,7 @@ Search.prototype.displayResults = function (results) {
     let html = '<ul>';
 
     results.forEach(result => {
+      let key = result.key;
       let entry = result.entry;
       let id = entry.id;
       let cssClass = '';
@@ -283,19 +285,19 @@ Search.prototype.displayResults = function (results) {
 
       if (entry.type === 'clause') {
         let number = entry.number ? entry.number + ' ' : '';
-        text = number + entry.key;
+        text = number + key;
         cssClass = 'clause';
         id = entry.id;
       } else if (entry.type === 'production') {
-        text = entry.key;
+        text = key;
         cssClass = 'prod';
         id = entry.id;
       } else if (entry.type === 'op') {
-        text = entry.key;
+        text = key;
         cssClass = 'op';
         id = entry.id || entry.refId;
       } else if (entry.type === 'term') {
-        text = entry.key;
+        text = key;
         cssClass = 'term';
         id = entry.id || entry.refId;
       }
@@ -314,6 +316,31 @@ Search.prototype.displayResults = function (results) {
     this.$searchResults.classList.add('no-results');
   }
 };
+
+function getKey(item) {
+  if (item.key) {
+    return item.key;
+  }
+  switch (item.type) {
+    case 'clause':
+      return item.title || item.titleHTML;
+    case 'production':
+      return item.name;
+    case 'op':
+      return item.aoid;
+    case 'term':
+      return item.term;
+    case 'table':
+    case 'figure':
+    case 'example':
+    case 'note':
+      return item.caption;
+    case 'step':
+      return item.id;
+    default:
+      throw new Error("Can't get key for " + item.type);
+  }
+}
 
 function Menu() {
   this.$toggle = document.getElementById('menu-toggle');
@@ -507,7 +534,7 @@ Menu.prototype.addPinEntry = function (id) {
     // prettier-ignore
     this.$pinList.innerHTML += `<li><a href="${makeLinkToId(entry.id)}">${prefix}${entry.titleHTML}</a></li>`;
   } else {
-    this.$pinList.innerHTML += `<li><a href="${makeLinkToId(entry.id)}">${entry.key}</a></li>`;
+    this.$pinList.innerHTML += `<li><a href="${makeLinkToId(entry.id)}">${getKey(entry)}</a></li>`;
   }
 
   if (Object.keys(this._pinnedIds).length === 0) {
@@ -727,6 +754,7 @@ let referencePane = {
 
     let $spacer = document.createElement('div');
     $spacer.setAttribute('id', 'references-pane-spacer');
+    $spacer.classList.add('menu-spacer');
 
     this.$pane = document.createElement('div');
     this.$pane.setAttribute('id', 'references-pane');
@@ -782,7 +810,7 @@ let referencePane = {
     this.$headerRefId.textContent = '#' + entry.id;
     this.$headerRefId.setAttribute('href', makeLinkToId(entry.id));
     this.$headerRefId.style.display = 'inline';
-    entry.referencingIds
+    (entry.referencingIds || [])
       .map(id => {
         let cid = menu.search.biblio.refParentClause[id];
         let clause = menu.search.biblio.byId[cid];
@@ -875,6 +903,7 @@ let Toolbox = {
       e.preventDefault();
       e.stopPropagation();
       menu.togglePinEntry(this.entry.id);
+      this.$pinLink.textContent = menu._pinnedIds[this.entry.id] ? 'Unpin' : 'Pin';
     });
 
     this.$refsLink = document.createElement('a');
@@ -895,6 +924,7 @@ let Toolbox = {
     sdoBox.deactivate();
     this.active = true;
     this.entry = entry;
+    this.$pinLink.textContent = menu._pinnedIds[entry.id] ? 'Unpin' : 'Pin';
     this.$outer.classList.add('active');
     this.top = el.offsetTop - this.$outer.offsetHeight;
     this.left = el.offsetLeft - 10;
@@ -913,7 +943,7 @@ let Toolbox = {
   },
 
   updateReferences() {
-    this.$refsLink.textContent = `References (${this.entry.referencingIds.length})`;
+    this.$refsLink.textContent = `References (${(this.entry.referencingIds || []).length})`;
   },
 
   activateIfMouseOver(e) {
@@ -1034,7 +1064,10 @@ function doShortcut(e) {
   if (name === 'textarea' || name === 'input' || name === 'select' || target.isContentEditable) {
     return;
   }
-  if (e.key === 'm' && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && usesMultipage) {
+  if (e.altKey || e.ctrlKey || e.metaKey) {
+    return;
+  }
+  if (e.key === 'm' && usesMultipage) {
     let pathParts = location.pathname.split('/');
     let hash = location.hash;
     if (pathParts[pathParts.length - 2] === 'multipage') {
@@ -1051,6 +1084,10 @@ function doShortcut(e) {
     } else {
       location = 'multipage/' + hash;
     }
+  } else if (e.key === 'u') {
+    document.documentElement.classList.toggle('show-ao-annotations');
+  } else if (e.key === '?') {
+    document.getElementById('shortcuts-help').classList.toggle('active');
   }
 }
 
@@ -1066,8 +1103,11 @@ function init() {
   document.addEventListener(
     'keydown',
     debounce(e => {
-      if (e.code === 'Escape' && Toolbox.active) {
-        Toolbox.deactivate();
+      if (e.code === 'Escape') {
+        if (Toolbox.active) {
+          Toolbox.deactivate();
+        }
+        document.getElementById('shortcuts-help').classList.remove('active');
       }
     })
   );
@@ -1078,6 +1118,114 @@ document.addEventListener('keypress', doShortcut);
 document.addEventListener('DOMContentLoaded', () => {
   Toolbox.init();
   referencePane.init();
+});
+
+// preserve state during navigation
+
+function getTocPath(li) {
+  let path = [];
+  let pointer = li;
+  while (true) {
+    let parent = pointer.parentElement;
+    if (parent == null) {
+      return null;
+    }
+    let index = [].indexOf.call(parent.children, pointer);
+    if (index == -1) {
+      return null;
+    }
+    path.unshift(index);
+    pointer = parent.parentElement;
+    if (pointer == null) {
+      return null;
+    }
+    if (pointer.id === 'menu-toc') {
+      break;
+    }
+    if (pointer.tagName !== 'LI') {
+      return null;
+    }
+  }
+  return path;
+}
+
+function activateTocPath(path) {
+  try {
+    let pointer = document.getElementById('menu-toc');
+    for (let index of path) {
+      pointer = pointer.querySelector('ol').children[index];
+    }
+    pointer.classList.add('active');
+  } catch (e) {
+    // pass
+  }
+}
+
+function getActiveTocPaths() {
+  return [...menu.$menu.querySelectorAll('.active')].map(getTocPath).filter(p => p != null);
+}
+
+function loadStateFromSessionStorage() {
+  if (!window.sessionStorage || typeof menu === 'undefined' || window.navigating) {
+    return;
+  }
+  if (sessionStorage.referencePaneState != null) {
+    let state = JSON.parse(sessionStorage.referencePaneState);
+    if (state != null) {
+      if (state.type === 'ref') {
+        let entry = menu.search.biblio.byId[state.id];
+        if (entry != null) {
+          referencePane.showReferencesFor(entry);
+        }
+      } else if (state.type === 'sdo') {
+        let sdos = sdoMap[state.id];
+        if (sdos != null) {
+          referencePane.$headerText.innerHTML = state.html;
+          referencePane.showSDOsBody(sdos, state.id);
+        }
+      }
+      delete sessionStorage.referencePaneState;
+    }
+  }
+
+  if (sessionStorage.activeTocPaths != null) {
+    document
+      .getElementById('menu-toc')
+      .querySelectorAll('.active')
+      .forEach(e => {
+        e.classList.remove('active');
+      });
+    let active = JSON.parse(sessionStorage.activeTocPaths);
+    active.forEach(activateTocPath);
+    delete sessionStorage.activeTocPaths;
+  }
+
+  if (sessionStorage.searchValue != null) {
+    let value = JSON.parse(sessionStorage.searchValue);
+    menu.search.$searchBox.value = value;
+    menu.search.search(value);
+    delete sessionStorage.searchValue;
+  }
+
+  if (sessionStorage.tocScroll != null) {
+    let tocScroll = JSON.parse(sessionStorage.tocScroll);
+    menu.$toc.scrollTop = tocScroll;
+    delete sessionStorage.tocScroll;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadStateFromSessionStorage);
+
+window.addEventListener('pageshow', loadStateFromSessionStorage);
+
+window.addEventListener('beforeunload', () => {
+  if (!window.sessionStorage || typeof menu === 'undefined') {
+    return;
+  }
+  sessionStorage.referencePaneState = JSON.stringify(referencePane.state || null);
+  sessionStorage.activeTocPaths = JSON.stringify(getActiveTocPaths());
+  sessionStorage.searchValue = JSON.stringify(menu.search.$searchBox.value);
+  sessionStorage.tocScroll = JSON.stringify(menu.$toc.scrollTop);
 });
 
 'use strict';
@@ -1112,7 +1260,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 let sdoMap = JSON.parse(`{}`);
-let biblio = JSON.parse(`{"refsByClause":{"sec-demo-clause":["_ref_0"]},"entries":[{"type":"clause","id":"sec-demo-clause","aoid":null,"titleHTML":"This is an emu-clause","number":"1","referencingIds":[],"key":"This is an emu-clause"},{"type":"clause","id":"sec-copyright-and-software-license","aoid":null,"titleHTML":"Copyright &amp; Software License","number":"A","referencingIds":[],"key":"Copyright & Software License"}]}`);
+let biblio = JSON.parse(`{"refsByClause":{"sec-proxy.revocable":["_ref_0"]},"entries":[{"type":"op","aoid":"EnsureProxyAlive","refId":"sec-ensure-proxy-alive"},{"type":"clause","id":"sec-ensure-proxy-alive","title":"EnsureProxyAlive ( object )","titleHTML":"EnsureProxyAlive ( <var>object</var> )","number":"1.1"},{"type":"op","aoid":"GetProxySignal","refId":"sec-get-proxy-signal"},{"type":"clause","id":"sec-get-proxy-signal","title":"GetProxySignal ( object )","titleHTML":"GetProxySignal ( <var>object</var> )","number":"1.2","referencingIds":["_ref_0"]},{"type":"clause","id":"sec-proxy.revocable","title":"Proxy.revocable ( target, handler, options )","titleHTML":"Proxy.revocable ( <var>target</var>, <var>handler</var>, <var>options</var> )","number":"1.3"},{"type":"clause","id":"sec-host-integration","titleHTML":"Host integration","number":"1.4"},{"type":"clause","id":"sec-algr","titleHTML":"Algorithm","number":"1"},{"type":"clause","id":"sec-copyright-and-software-license","title":"Copyright & Software License","titleHTML":"Copyright &amp; Software License","number":"A"}]}`);
 ;let usesMultipage = false</script><style>body {
   display: flex;
   font-size: 18px;
@@ -1148,6 +1296,43 @@ a:visited {
 a:hover {
   text-decoration: underline;
   color: #239dee;
+}
+
+a.e-user-code,
+span.e-user-code {
+  white-space: nowrap;
+}
+
+a.e-user-code::before,
+span.e-user-code::before {
+  display: none;
+  color: brown;
+  background-color: white;
+  border: 2pt solid brown;
+  padding: 0.3ex;
+  margin: 0 0.25em 0 0;
+  line-height: 1;
+  vertical-align: text-top;
+  text-transform: uppercase;
+  font-family: 'Comic Code', sans-serif;
+  font-weight: 900;
+  font-size: x-small;
+}
+
+a.e-user-code:hover::before,
+span.e-user-code:hover::before {
+  background-color: brown;
+  color: white;
+}
+
+html.show-ao-annotations a.e-user-code::before,
+html.show-ao-annotations span.e-user-code::before {
+  display: inline-block;
+}
+
+a.e-user-code::before,
+span.e-user-code::before {
+  content: 'UC';
 }
 
 code {
@@ -1826,7 +2011,7 @@ tr.del > td {
   z-index: 2;
 }
 
-#menu-spacer {
+.menu-spacer {
   flex-basis: 33%;
   max-width: 500px;
   flex-grow: 0;
@@ -2241,11 +2426,6 @@ li.menu-search-result-term:before {
   overflow-y: auto;
 }
 
-#references-pane-spacer {
-  flex-basis: 33%;
-  max-width: 500px;
-}
-
 #references-pane {
   flex-grow: 1;
   overflow: hidden;
@@ -2261,6 +2441,10 @@ li.menu-search-result-term:before {
   content: '✖';
   float: right;
   cursor: pointer;
+}
+
+#references-pane table tbody {
+  vertical-align: baseline;
 }
 
 #references-pane table tr td:first-child {
@@ -2290,17 +2474,99 @@ li.menu-search-result-term:before {
 .clause-attributes-tag a {
   color: #884400;
 }
-</style></head><body><div id="menu-toggle">☰</div><div id="menu-spacer"></div><div id="menu"><div id="menu-search"><input type="text" id="menu-search-box" placeholder="Search..."><div id="menu-search-results" class="inactive"></div></div><div id="menu-pins"><div class="menu-pane-header">Pins</div><ul id="menu-pins-list"></ul></div><div class="menu-pane-header">Table of Contents</div><div id="menu-toc"><ol class="toc"><li><span class="item-toggle-none"></span><a href="#sec-demo-clause" title="This is an emu-clause"><span class="secnum">1</span> This is an emu-clause</a></li><li><span class="item-toggle-none"></span><a href="#sec-copyright-and-software-license" title="Copyright &amp; Software License"><span class="secnum">A</span> Copyright &amp; Software License</a></li></ol></div></div><div id="spec-container"><h1 class="version">Stage -1 Draft / July 13, 2022</h1><h1 class="title">Proposal Title Goes Here</h1>
 
-<emu-clause id="sec-demo-clause">
-  <h1><span class="secnum">1</span> This is an emu-clause</h1>
-  <p>This is an algorithm:</p>
-  <emu-alg><ol><li>Let <var>proposal</var> be <emu-val>undefined</emu-val>.</li><li>If IsAccepted(<var>proposal</var>),<ol><li>Let <var>stage</var> be <emu-val>0</emu-val>.</li></ol></li><li>Else,<ol><li>Let <var>stage</var> be <emu-val>-1</emu-val>.</li></ol></li><li>Return ?&nbsp;<emu-xref aoid="ToString" id="_ref_0"><a href="https://tc39.es/ecma262/#sec-tostring">ToString</a></emu-xref>(<var>proposal</var>).</li></ol></emu-alg>
+/* Shortcuts help dialog */
+
+#shortcuts-help {
+  position: fixed;
+  left: 5%;
+  margin: 0 auto;
+  right: 5%;
+  z-index: 10;
+  top: 10%;
+  top: calc(5vw + 5vh);
+  padding: 30px 90px;
+  max-width: 500px;
+  outline: solid 10000px rgba(255, 255, 255, 0.6);
+  border-radius: 5px;
+  border-width: 1px 1px 0 1px;
+  background-color: #ddd;
+  display: none;
+}
+
+#shortcuts-help.active {
+  display: block;
+}
+
+#shortcuts-help ul {
+  padding: 0;
+}
+
+#shortcuts-help li {
+  display: flex;
+  justify-content: space-between;
+}
+
+#shortcuts-help code {
+  padding: 3px 10px;
+  border-radius: 3px;
+  border-width: 1px 1px 0 1px;
+  border-color: #bbb;
+  background-color: #eee;
+  box-shadow: inset 0 -1px 0 #ccc;
+}
+</style></head><body><div id="shortcuts-help">
+<ul>
+  <li><span>Toggle shortcuts help</span><code>?</code></li>
+  <li><span>Toggle "can call user code" annotations</span><code>u</code></li>
+
+  <li><span>Jump to search box</span><code>/</code></li>
+</ul></div><div id="menu-toggle"><svg xmlns="http://www.w3.org/2000/svg" style="width:100%; height:100%; stroke:currentColor" viewBox="0 0 120 120">
+      <title>Menu</title>
+      <path stroke-width="10" stroke-linecap="round" d="M30,60 h60  M30,30 m0,5 h60  M30,90 m0,-5 h60"></path>
+    </svg></div><div id="menu-spacer" class="menu-spacer"></div><div id="menu"><div id="menu-search"><input type="text" id="menu-search-box" placeholder="Search..."><div id="menu-search-results" class="inactive"></div></div><div id="menu-pins"><div class="menu-pane-header">Pins</div><ul id="menu-pins-list"></ul></div><div class="menu-pane-header">Table of Contents</div><div id="menu-toc"><ol class="toc"><li><span class="item-toggle">◢</span><a href="#sec-algr" title="Algorithm"><span class="secnum">1</span> Algorithm</a><ol class="toc"><li><span class="item-toggle-none"></span><a href="#sec-ensure-proxy-alive" title="EnsureProxyAlive ( object )"><span class="secnum">1.1</span> EnsureProxyAlive ( <var>object</var> )</a></li><li><span class="item-toggle-none"></span><a href="#sec-get-proxy-signal" title="GetProxySignal ( object )"><span class="secnum">1.2</span> GetProxySignal ( <var>object</var> )</a></li><li><span class="item-toggle-none"></span><a href="#sec-proxy.revocable" title="Proxy.revocable ( target, handler, options )"><span class="secnum">1.3</span> Proxy.revocable ( <var>target</var>, <var>handler</var>, <var>options</var> )</a></li><li><span class="item-toggle-none"></span><a href="#sec-host-integration" title="Host integration"><span class="secnum">1.4</span> Host integration</a></li></ol></li><li><span class="item-toggle-none"></span><a href="#sec-copyright-and-software-license" title="Copyright &amp; Software License"><span class="secnum">A</span> Copyright &amp; Software License</a></li></ol></div></div><div id="spec-container"><h1 class="version">Stage 0 Draft / July 14, 2022</h1><h1 class="title">Proxy Revocation By Controllers</h1>
+
+<emu-clause id="sec-algr">
+  <h1><span class="secnum">1</span> Algorithm</h1>
+  <emu-clause id="sec-ensure-proxy-alive" type="abstract operation" aoid="EnsureProxyAlive">
+    <h1><span class="secnum">1.1</span> EnsureProxyAlive ( <var>object</var> )</h1>
+    <p>The abstract operation EnsureProxyAlive takes argument <var>object</var> (a Proxy) and returns either a <emu-xref href="#sec-completion-record-specification-type"><a href="https://tc39.es/ecma262/#sec-completion-record-specification-type">normal completion containing</a></emu-xref> <emu-const>unused</emu-const> or an <emu-xref href="#sec-completion-record-specification-type"><a href="https://tc39.es/ecma262/#sec-completion-record-specification-type">abrupt completion</a></emu-xref>. It is used make sure the proxy is not revoked.</p>
+    <emu-note><span class="note">Note</span><div class="note-contents">
+      <p>This Abstract Operation will replace every
+        <emu-alg><ol><li>Let <var>handler</var> be <var>O</var>.[[ProxyHandler]].</li><li>If <var>handler</var> is <emu-val>null</emu-val>, throw a <emu-val>TypeError</emu-val> exception.</li></ol></emu-alg>
+        in the Proxy internal slot algorithms.
+      </p>
+      <p>For the simplicity of this proposal spec, it will not included in this spec.</p>
+    </div></emu-note>
+    <p>It performs the following steps when called:</p>
+    <emu-alg><ol><li>If <var>object</var>.[[ProxyHandler]] is <emu-val>null</emu-val>, throw a TypeError exception.</li><li>If <var>object</var>.[[ProxyTarget]] is <emu-val>null</emu-val>, throw a TypeError exception.</li><li>If <var>object</var>.[[RevocationSignal]] is not <emu-val>null</emu-val>, and <var>object</var>.[[RevocationSignal]].[[IsRevoked]] is <emu-val>true</emu-val>, then<ol><li>Set <var>object</var>.[[ProxyTarget]] to <emu-val>null</emu-val>.</li><li>Set <var>object</var>.[[ProxyHandler]] to <emu-val>null</emu-val>.</li><li>Set <var>object</var>.[[RevocationSignal]] to <emu-val>null</emu-val>.</li><li>Throw a TypeError exception.</li></ol></li><li>Return <emu-const>unused</emu-const>.</li></ol></emu-alg>
+  </emu-clause>
+  <emu-clause id="sec-get-proxy-signal" type="abstract operation" aoid="GetProxySignal">
+    <h1><span class="secnum">1.2</span> GetProxySignal ( <var>object</var> )</h1>
+    <p>The abstract operation GetProxySignal takes argument <var>object</var> and returns either a <emu-xref href="#sec-completion-record-specification-type"><a href="https://tc39.es/ecma262/#sec-completion-record-specification-type">normal completion containing</a></emu-xref> a object contains [[HostRevocationSignal]] internal slot or undefined or an <emu-xref href="#sec-completion-record-specification-type"><a href="https://tc39.es/ecma262/#sec-completion-record-specification-type">abrupt completion</a></emu-xref>. It is used to get the revocation signal of the Proxy. It performs the following steps when called:</p>
+    <emu-alg><ol><li>If <emu-xref aoid="Type"><a href="https://tc39.es/ecma262/#sec-ecmascript-data-types-and-values">Type</a></emu-xref>(<var>object</var>) is not Object, return <emu-val>undefined</emu-val>.</li><li>Let <var>signal</var> be ?&nbsp;<emu-xref aoid="Get"><a href="https://tc39.es/ecma262/#sec-get-o-p">Get</a></emu-xref>(<var>object</var>, "signal").</li><li>If <var>signal</var> is <emu-val>undefined</emu-val>, return <emu-val>undefined</emu-val>.</li><li>If <emu-xref aoid="Type"><a href="https://tc39.es/ecma262/#sec-ecmascript-data-types-and-values">Type</a></emu-xref>(<var>signal</var>) is not Object, throw a TypeError exception.</li><li>If <var>signal</var> does not have a [[HostRevocationSignal]] internal slot, throw a TypeError exception.</li><li>Return <var>signal</var>.</li></ol></emu-alg>
+  </emu-clause>
+  <emu-clause id="sec-proxy.revocable" oldids="sec-proxy-revocation-functions"><span id="sec-proxy-revocation-functions"></span>
+    <h1><span class="secnum">1.3</span> Proxy.revocable ( <var>target</var>, <var>handler</var>, <var>options</var> )</h1>
+    <p>The <code>Proxy.revocable</code> function is used to create a revocable Proxy object. When <code>Proxy.revocable</code> is called with arguments <var>target</var>, <var>handler</var> and <var>options</var>, the following steps are taken:</p>
+    <emu-alg><ol><li>Let <var>p</var> be ?&nbsp;<emu-xref aoid="ProxyCreate"><a href="https://tc39.es/ecma262/#sec-proxycreate">ProxyCreate</a></emu-xref>(<var>target</var>, <var>handler</var>).</li><li><ins>Let <var>signal</var> be ?&nbsp;<emu-xref aoid="GetProxySignal" id="_ref_0"><a href="#sec-get-proxy-signal">GetProxySignal</a></emu-xref>(<var>options</var>).</ins></li><li><ins>If <var>signal</var> is not <emu-val>undefined</emu-val>, then</ins><ol><li><ins>Let <var>p</var>.[[RevocationSignal]] be <var>signal</var>.[[HostRevocationSignal]].</ins></li></ol></li><li>Let <var>revokerClosure</var> be a new <emu-xref href="#sec-abstract-closure"><a href="https://tc39.es/ecma262/#sec-abstract-closure">Abstract Closure</a></emu-xref> with no parameters that captures nothing and performs the following steps when called:<ol><li>Let <var>F</var> be the <emu-xref href="#active-function-object"><a href="https://tc39.es/ecma262/#active-function-object">active function object</a></emu-xref>.</li><li>Let <var>p</var> be <var>F</var>.[[RevocableProxy]].</li><li>If <var>p</var> is <emu-val>null</emu-val>, return <emu-val>undefined</emu-val>.</li><li>Set <var>F</var>.[[RevocableProxy]] to <emu-val>null</emu-val>.</li><li><emu-xref href="#assert"><a href="https://tc39.es/ecma262/#assert">Assert</a></emu-xref>: <var>p</var> is a Proxy object.</li><li>Set <var>p</var>.[[ProxyTarget]] to <emu-val>null</emu-val>.</li><li>Set <var>p</var>.[[ProxyHandler]] to <emu-val>null</emu-val>.</li><li><ins>Set <var>p</var>.[[RevocationSignal]] to <emu-val>null</emu-val>.</ins></li><li>Return <emu-val>undefined</emu-val>.</li></ol></li><li>Let <var>revoker</var> be <emu-xref aoid="CreateBuiltinFunction"><a href="https://tc39.es/ecma262/#sec-createbuiltinfunction">CreateBuiltinFunction</a></emu-xref>(<var>revokerClosure</var>, 0, <emu-val>""</emu-val>, « [[RevocableProxy]] »).</li><li>Set <var>revoker</var>.[[RevocableProxy]] to <var>p</var>.</li><li>Let <var>result</var> be <emu-xref aoid="OrdinaryObjectCreate"><a href="https://tc39.es/ecma262/#sec-ordinaryobjectcreate">OrdinaryObjectCreate</a></emu-xref>(<emu-xref href="#sec-properties-of-the-object-prototype-object"><a href="https://tc39.es/ecma262/#sec-properties-of-the-object-prototype-object">%Object.prototype%</a></emu-xref>).</li><li>Perform !&nbsp;<emu-xref aoid="CreateDataPropertyOrThrow"><a href="https://tc39.es/ecma262/#sec-createdatapropertyorthrow">CreateDataPropertyOrThrow</a></emu-xref>(<var>result</var>, <emu-val>"proxy"</emu-val>, <var>p</var>).</li><li>Perform !&nbsp;<emu-xref aoid="CreateDataPropertyOrThrow"><a href="https://tc39.es/ecma262/#sec-createdatapropertyorthrow">CreateDataPropertyOrThrow</a></emu-xref>(<var>result</var>, <emu-val>"revoke"</emu-val>, <var>revoker</var>).</li><li>Return <var>result</var>.</li></ol></emu-alg>
+  </emu-clause>
+
+  <emu-clause id="sec-host-integration">
+    <h1><span class="secnum">1.4</span> Host integration</h1>
+    <p>The <emu-xref href="#host"><a href="https://tc39.es/ecma262/#host">host</a></emu-xref> defined object <a href="https://dom.spec.whatwg.org/#abortsignal">AbortSignal</a> will have a <code>[[HostRevocationSignal]]</code> internal slot. This means developers write the following code:</p>
+    <pre><code class="javascript hljs"><span class="hljs-keyword">const</span> controller = <span class="hljs-keyword">new</span> <span class="hljs-title class_">AbortController</span>();
+<span class="hljs-keyword">const</span> proxy = <span class="hljs-title class_">Proxy</span>.<span class="hljs-title function_">revocable</span>(target, handler, { <span class="hljs-attr">signal</span>: controller.<span class="hljs-property">signal</span> });
+controller.<span class="hljs-title function_">abort</span>();
+proxy.<span class="hljs-property">hello</span> <span class="hljs-comment">// throws: Proxy revoked.</span></code></pre>
+    <p>The <code>[[HostRevocationSignal]]</code> internal slot on a <emu-xref href="#host"><a href="https://tc39.es/ecma262/#host">host</a></emu-xref> object must have a <code>[[IsRevoked]]</code> internal slot which contains a <emu-val>boolean</emu-val> value.</p>
+    <p>Once <code>[[IsRevoked]]</code> becomes <emu-val>true</emu-val>, it cannot become <emu-val>false</emu-val>.</p>
+  </emu-clause>
 </emu-clause><emu-annex id="sec-copyright-and-software-license">
       <h1><span class="secnum">A</span> Copyright &amp; Software License</h1>
       
       <h2>Copyright Notice</h2>
-      <p>© 2022 Your Name(s) Here</p>
+      <p>© 2022 Alexander J. Vincent,Bradley Farias,Mark S. Miller,Jack Works</p>
 
       <h2>Software License</h2>
       <p>All Software contained in this document ("Software") is protected by copyright and is being made available under the "BSD License", included below. This Software may be subject to third party rights (rights from parties other than Ecma International), including patent rights, and no licenses under such third party rights are granted under this license even if the third party concerned is a member of Ecma International. SEE THE ECMA CODE OF CONDUCT IN PATENT MATTERS AVAILABLE AT https://ecma-international.org/memento/codeofconduct.htm FOR INFORMATION REGARDING THE LICENSING OF PATENT CLAIMS THAT ARE REQUIRED TO IMPLEMENT ECMA INTERNATIONAL STANDARDS.</p>

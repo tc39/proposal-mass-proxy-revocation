@@ -4,20 +4,103 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/github.min.css">
 <script src="./spec.js"></script>
 <pre class="metadata">
-title: Proposal Title Goes Here
-stage: -1
-contributors: Your Name(s) Here
+title: Proxy Revocation By Controllers
+stage: 0
+contributors:
+  - Alexander J. Vincent
+  - Bradley Farias
+  - Mark S. Miller
+  - Jack Works
 </pre>
 
-<emu-clause id="sec-demo-clause">
-  <h1>This is an emu-clause</h1>
-  <p>This is an algorithm:</p>
-  <emu-alg>
-    1. Let _proposal_ be *undefined*.
-    1. If IsAccepted(_proposal_),
-      1. Let _stage_ be *0*.
-    1. Else,
-      1. Let _stage_ be *-1*.
-    1. Return ? ToString(_proposal_).
-  </emu-alg>
+<emu-clause id="sec-algr">
+  <h1>Algorithm</h1>
+  <emu-clause id="sec-ensure-proxy-alive" type="abstract operation">
+    <h1>
+      EnsureProxyAlive (
+        _object_: a Proxy,
+      ): either a normal completion containing ~unused~ or an abrupt completion
+    </h1>
+    <dl class="header">
+      <dt>description</dt>
+      <dd>It is used make sure the proxy is not revoked.</dd>
+    </dl>
+    <emu-note>
+      <p>This Abstract Operation will replace every
+        <emu-alg>
+          1. Let _handler_ be _O_.[[ProxyHandler]].
+          1. If _handler_ is *null*, throw a *TypeError* exception.
+        </emu-alg>
+        in the Proxy internal slot algorithms.
+      </p>
+      <p>For the simplicity of this proposal spec, it will not included in this spec.</p>
+    </emu-note>
+    <emu-alg>
+      1. If _object_.[[ProxyHandler]] is *null*, throw a TypeError exception.
+      1. If _object_.[[ProxyTarget]] is *null*, throw a TypeError exception.
+      1. If _object_.[[RevocationSignal]] is not *null*, and _object_.[[RevocationSignal]].[[IsRevoked]] is *true*, then
+        1. Set _object_.[[ProxyTarget]] to *null*.
+        1. Set _object_.[[ProxyHandler]] to *null*.
+        1. Set _object_.[[RevocationSignal]] to *null*.
+        1. Throw a TypeError exception.
+      1. Return ~unused~.
+    </emu-alg>
+  </emu-clause>
+  <emu-clause id="sec-get-proxy-signal" type="abstract operation">
+    <h1>
+      GetProxySignal (
+        _object_: unknown,
+      ): either a normal completion containing a object contains [[HostRevocationSignal]] internal slot or undefined or an abrupt completion
+    </h1>
+    <dl class="header">
+      <dt>description</dt>
+      <dd>It is used to get the revocation signal of the Proxy.</dd>
+    </dl>
+    <emu-alg>
+      1. If Type(_object_) is not Object, return *undefined*.
+      1. Let _signal_ be ? Get(_object_, "signal").
+      1. If _signal_ is *undefined*, return *undefined*.
+      1. If Type(_signal_) is not Object, throw a TypeError exception.
+      1. If _signal_ does not have a [[HostRevocationSignal]] internal slot, throw a TypeError exception.
+      1. Return _signal_.
+    </emu-alg>
+  </emu-clause>
+  <emu-clause id="sec-proxy.revocable" oldids="sec-proxy-revocation-functions">
+    <h1>Proxy.revocable ( _target_, _handler_, _options_ )</h1>
+    <p>The `Proxy.revocable` function is used to create a revocable Proxy object. When `Proxy.revocable` is called with arguments _target_, _handler_ and _options_, the following steps are taken:</p>
+    <emu-alg>
+      1. Let _p_ be ? ProxyCreate(_target_, _handler_).
+      1. <ins>Let _signal_ be ? GetProxySignal(_options_).</ins>
+      1. <ins>If _signal_ is not *undefined*, then</ins>
+        1. <ins>Let _p_.[[RevocationSignal]] be _signal_.[[HostRevocationSignal]].</ins>
+      1. Let _revokerClosure_ be a new Abstract Closure with no parameters that captures nothing and performs the following steps when called:
+        1. Let _F_ be the active function object.
+        1. Let _p_ be _F_.[[RevocableProxy]].
+        1. If _p_ is *null*, return *undefined*.
+        1. Set _F_.[[RevocableProxy]] to *null*.
+        1. Assert: _p_ is a Proxy object.
+        1. Set _p_.[[ProxyTarget]] to *null*.
+        1. Set _p_.[[ProxyHandler]] to *null*.
+        1. <ins>Set _p_.[[RevocationSignal]] to *null*.</ins>
+        1. Return *undefined*.
+      1. Let _revoker_ be CreateBuiltinFunction(_revokerClosure_, 0, *""*, &laquo; [[RevocableProxy]] &raquo;).
+      1. Set _revoker_.[[RevocableProxy]] to _p_.
+      1. Let _result_ be OrdinaryObjectCreate(%Object.prototype%).
+      1. Perform ! CreateDataPropertyOrThrow(_result_, *"proxy"*, _p_).
+      1. Perform ! CreateDataPropertyOrThrow(_result_, *"revoke"*, _revoker_).
+      1. Return _result_.
+    </emu-alg>
+  </emu-clause>
+
+  <emu-clause id="sec-host-integration">
+    <h1>Host integration</h1>
+    <p>The host defined object <a href="https://dom.spec.whatwg.org/#abortsignal">AbortSignal</a> will have a `[[HostRevocationSignal]]` internal slot. This means developers write the following code:</p>
+    <pre><code class="javascript">const controller = new AbortController();
+const proxy = Proxy.revocable(target, handler, { signal: controller.signal });
+controller.abort();
+proxy.hello // throws: Proxy revoked.
+</code></pre>
+    <p>The `[[HostRevocationSignal]]` internal slot on a host object must have a `[[IsRevoked]]` internal slot which contains a *boolean* value.</p>
+    <p>Once `[[IsRevoked]]` becomes *true*, it cannot become *false*.</p>
+  </emu-clause>
 </emu-clause>
