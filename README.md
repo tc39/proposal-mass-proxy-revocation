@@ -3,7 +3,8 @@
 ## Status
 
 - Champion(s): Mark S. Miller, Jack Works (all credit goes to Alex and Bradley)
-- Author(s): Alexander J. Vincent, Bradley Farias
+- Author(s): Alexander J. Vincent
+- Author Emeritus: Bradley Farias
 - Stage: 0
 
 ## Motivation
