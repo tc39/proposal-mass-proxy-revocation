@@ -115,7 +115,7 @@ There is prior art for passing AbortSignals across Realms.  See issue #1.
 
 **Q**: Should `new Proxy` get a third argument as well? (#6)
 
-**A**: Maybe.  We're undecided on this.  In favor would be consistency.  Against would be that proxies created via `new Proxy` do not have a revocation mechanism.
+**A**: Yes.  When that third argument is available but missing, the default behavior doesn't change. Since new Proxy doesn't have more than two arguments right now, we should reasonably expect people aren't using a third argument...
 
 ### Out of Scope
 
