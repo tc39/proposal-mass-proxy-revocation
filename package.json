@@ -3,9 +3,9 @@
   "name": "template-for-proposals",
   "description": "A repository template for ECMAScript proposals.",
   "scripts": {
-    "start": "npm run build-loose -- --watch",
-    "build": "npm run build-loose -- --strict",
-    "build-loose": "ecmarkup --verbose spec.emu index.html"
+    "start": "npm run build-base -- --watch",
+    "build": "npm run build-base -- --strict",
+    "build-base": "ecmarkup spec.emu index.html --load-biblio @tc39/ecma262-biblio --lint-spec"
   },
   "homepage": "https://github.com/tc39/template-for-proposals#readme",
   "repository": {
@@ -14,6 +14,7 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "ecmarkup": "^8.1.0"
+    "@tc39/ecma262-biblio": "^2.1.2338",
+    "ecmarkup": "^14.0.0"
   }
 }
