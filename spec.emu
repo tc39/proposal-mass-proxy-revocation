@@ -50,7 +50,7 @@ contributors:
     <h1>
       GetProxySignal (
         _object_: unknown,
-      ): either a normal completion containing a object contains [[HostRevocationSignal]] internal slot or undefined or an abrupt completion
+      ): either a normal completion containing an ECMAScript language value or an abrupt completion
     </h1>
     <dl class="header">
       <dt>description</dt>
