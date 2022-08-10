@@ -123,6 +123,8 @@ There is prior art for passing AbortSignals across Realms.  See issue #1.
 
 **A**: We're certainly willing to adjust our proposal to be compatible with and/or dependent on the Cancellation proposal.  Regarding AbortController, SES believes that making TC39 proposals depend on Web API's is a non-starter, unless AbortController becomes part of ECMAScript (highly unlikely).
 
+In particular, the `RevocationController` is something we can replace with another standard API from TC39.
+
 ### Out of Scope
 
 #### Observing revocation
