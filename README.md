@@ -119,6 +119,10 @@ There is prior art for passing AbortSignals across Realms.  See issue #1.
 
 **A**: Yes.  When that third argument is available but missing, the default behavior doesn't change. Since new Proxy doesn't have more than two arguments right now, we should reasonably expect people aren't using a third argument...
 
+**Q**: What relationship is there to the [Cancellation proposal](https://github.com/tc39/proposal-cancellation) and/or [AbortController](https://developer.mozilla.org/en-US/docs/Web/API/AbortController)? (#13)
+
+**A**: We're certainly willing to adjust our proposal to be compatible with and/or dependent on the Cancellation proposal.  Regarding AbortController, SES believes that making TC39 proposals depend on Web API's is a non-starter, unless AbortController becomes part of ECMAScript (highly unlikely).
+
 ### Out of Scope
 
 #### Observing revocation
