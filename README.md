@@ -13,7 +13,7 @@ Spec: https://ajvincent.github.io/proposal-mass-proxy-revocation/
 
 Membranes, which use Proxy and WeakMap to separate one object graph (think "Realm") from others, could have hundreds or thousands of proxies in each object graph.  In revoking an object graph, a membrane must revoke all of these proxies at once, and all proxies in other object graphs to objects in that object graph.
 
-We propose a RevocationController class, available via a static maker function on Proxy, and which developers can pass instances into Proxy.revocable via a third argument.  RevocationController draws inspiration directly from the Document Object Model's [AbortController](https://dom.spec.whatwg.org/#interface-abortcontroller).  (We are aware of the Cancellation proposal and are quite willing to replace RevocationController with a class from that proposal.)
+We propose a `RevocationController` class, available via a static maker function on Proxy, and which developers can pass instances into `new Proxy()` or  `Proxy.revocable()` via a third argument.  RevocationController draws inspiration directly from the Document Object Model's [AbortController](https://dom.spec.whatwg.org/#interface-abortcontroller).  (We are aware of the Cancellation proposal and are quite willing to replace RevocationController with a class from that proposal.)
 
 ## Use cases
 
