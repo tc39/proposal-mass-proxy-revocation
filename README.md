@@ -94,7 +94,7 @@ If we don't actually create a revoker function per proxy, this means less memory
 
 *A comparison across various related programming languages and/or libraries. If this is the first sort of language or library to do this thing, explain why that is the case. If this is a standard library feature, a comparison across the JavaScript ecosystem would be good; if it's a syntax feature, that might not be practical, and comparisons may be limited to other programming languages.*
 
-There is prior art for passing AbortSignals across Realms.  See issue #1.
+There is prior art for passing AbortSignals across Realms.  See issue [#1](https://ajvincent.github.io/proposal-mass-proxy-revocation/issues/1).
 
 ## Implementations
 
@@ -116,7 +116,7 @@ There is prior art for passing AbortSignals across Realms.  See issue #1.
 
 **A**: We believe this is the simplest way to maintain backwards compatibility and add the feature we are requesting.  We are also aware of the importance of shaping this third-argument API correctly up front.
 
-**Q**: What relationship is there to the [Cancellation proposal](https://github.com/tc39/proposal-cancellation) and/or [AbortController](https://developer.mozilla.org/en-US/docs/Web/API/AbortController)? (#13)
+**Q**: What relationship is there to the [Cancellation proposal](https://github.com/tc39/proposal-cancellation) and/or [AbortController](https://developer.mozilla.org/en-US/docs/Web/API/AbortController)? ([#13](https://ajvincent.github.io/proposal-mass-proxy-revocation/issues/13))
 
 **A**: We're certainly willing to adjust our proposal to be compatible with and/or dependent on the Cancellation proposal.  Regarding AbortController, SES believes that making TC39 proposals depend on Web API's is a non-starter, unless AbortController becomes part of ECMAScript (highly unlikely).
 
