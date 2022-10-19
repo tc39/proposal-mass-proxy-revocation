@@ -1,7 +1,5 @@
 # Mass Proxy Revocation
 
-Spec: https://ajvincent.github.io/proposal-mass-proxy-revocation/
-
 ## Status
 
 - Champion(s): Mark S. Miller, Jack Works (all credit goes to Alex and Bradley)
