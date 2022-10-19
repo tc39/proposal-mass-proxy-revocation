@@ -17,9 +17,7 @@ We propose the creation and tracking of "revocation signal" symbols, which devel
 
 ### Membranes revoking entire object graphs
 
-In April 2021, Mark Miller proposed an idea for Realms, [adding a .revoke() method](https://github.com/tc39/proposal-shadowrealm/issues/299).  The idea there is you could have all the proxies in a Realm revoked at once.  Everyone who’s responded generally thinks it’s a great idea, but not necessary for the MVP of Realms.
-
-In the GitHub issue, Alex Vincent realized that this improvement didn’t go far enough.  Consider the following where each plane is a Realm, raw objects are spheres, proxies are hemispheres, and the vertical cylinders represent connections between proxies and their objects.  (This is a geometric model of a membrane.)
+Consider the following where each plane is a Realm, raw objects are spheres, proxies are hemispheres, and the vertical cylinders represent connections between proxies and their objects.  (This is a geometric model of a membrane.)
 
 Figure 1
 
