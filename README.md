@@ -23,7 +23,7 @@ Figure 1
 
 ![Three realms, visualized](ThreeRealms.png)
 
-Yellow.revoke(), as Mark envisioned it, would directly kill the &lt;html&gt; and &lt;body&gt; proxies in the Yellow realm, but it wouldn’t directly kill the "onload" proxies in the Blue and Green realms.  These proxies would only find out when they tried to access the Yellow “onload” object and threw exceptions.  They’re dead and don’t know it.  The client code is responsible for handling these exceptions.
+If we wish to revoke access to the Yellow realm, we can't just revoke proxies in the Yellow realm.  The "onload" proxies in the Blue and Green realms would only find out when they tried to access the Yellow “onload” object and threw exceptions.  They’re dead and don’t know it.  The client code is responsible for handling these exceptions.
 
 ```javascript
 // This is pseudo-code!
