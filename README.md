@@ -1,4 +1,4 @@
-# Proxy Revocation By Controllers
+# Mass Proxy Revocation
 
 Spec: https://ajvincent.github.io/proposal-mass-proxy-revocation/
 
@@ -13,7 +13,7 @@ Spec: https://ajvincent.github.io/proposal-mass-proxy-revocation/
 
 Membranes, which use Proxy and WeakMap to separate one object graph (think "Realm") from others, could have hundreds or thousands of proxies in each object graph.  In revoking an object graph, a membrane must revoke all of these proxies at once, and all proxies in other object graphs to objects in that object graph.
 
-We propose a `RevocationController` class, available via a static maker function on Proxy, and which developers can pass instances into `new Proxy()` or  `Proxy.revocable()` via a third argument.  RevocationController draws inspiration directly from the Document Object Model's [AbortController](https://dom.spec.whatwg.org/#interface-abortcontroller).  (We are aware of the Cancellation proposal and are quite willing to replace RevocationController with a class from that proposal.)
+We propose the creation and tracking of "revocation signal" symbols, which developers can pass instances into `new Proxy()` or  `Proxy.revocable()` via a *third* argument.  Users could create these signals via a `Proxy.createSignal()` static function, and revoke them via a `Proxy.finalizeSignal(signal)` static function.  (We are aware of the Cancellation proposal and are quite willing to replace this mechanism with an API from that proposal.)
 
 ## Use cases
 
@@ -30,6 +30,7 @@ Figure 1
 Yellow.revoke(), as Mark envisioned it, would directly kill the &lt;html&gt; and &lt;body&gt; proxies in the Yellow realm, but it wouldn’t directly kill the "onload" proxies in the Blue and Green realms.  These proxies would only find out when they tried to access the Yellow “onload” object and threw exceptions.  They’re dead and don’t know it.  The client code is responsible for handling these exceptions.
 
 ```javascript
+// This is pseudo-code!
 const membrane = new Membrane;
 
 const green = new ShadowRealm;
@@ -42,15 +43,15 @@ membrane.bindProxyForObject(yellow, green, "car");
 
 // In the membrane, this runs:
 {
-  const yellowGreenController = Proxy.revocationController(yellow, green);
-  this.cacheRevokeController(yellowGreenController, [yellow, green]);
+  const yellowGreenSignal = Proxy.createSignal();
+  this.#cacheRevokeSignal(yellowGreenSignal, [yellow, green]);
 
   const shadowTarget = {};
-  const { proxy } = Proxy.revocable(shadowTarget, membraneProxyHandler, { signal: yellowGreenController.signal });
+  const proxy = new Proxy(shadowTarget, membraneProxyHandler, { signal: yellowGreenSignal });
 
   green.car = proxy;
 
-  this.bindOneToOne(yellow, yellow.car, green, proxy);
+  this.#bindOneToOne(yellow, yellow.car, green, proxy);
 }
 
 // In the green realm, this code runs.
@@ -58,22 +59,22 @@ green.car.driver = new Driver;
 
 // In the membrane, this runs:
 {
-  const yellowGreenController = this.getRevokeController(yellow, green); // gets yellowGreenController from earlier
+  const yellowGreenSignal = this.#getRevokeSignal(yellow, green); // gets yellowGreenSignal from earlier
 
   const shadowTarget = {};
-  const { proxy } = Proxy.revocable(shadowTarget, membraneProxyHandler, { signal: yellowGreenController.signal });
+  const proxy = new Proxy(shadowTarget, membraneProxyHandler, { signal: yellowGreenSignal });
   yellow.car.driver = proxy;
 
-  this.bindOneToOne(green, green.car.driver, yellow, proxy);
+  this.#bindOneToOne(green, green.car.driver, yellow, proxy);
 }
 
 membrane.revoke(yellow);
 
 // In the membrane, this runs:
 {
-  const controllers = this.getRevokeControllers(yellow); // returns [yellowGreenController]
-  controllers.forEach(c => c.revoke());
-  // this triggers yellowGreenController.signal, which knocks out green.car and yellow.car.driver
+  const signals = this.#getRevokingSignals(yellow); // returns [yellowGreenSignal]
+  signals.forEach(s => Proxy.finalizeSymbol(s));
+  // this triggers yellowGreenSignal, which knocks out green.car and yellow.car.driver
 }
 ```
 
@@ -83,7 +84,7 @@ One particular benefit of this is returning revocation management (and thus, gar
 
 ### Memory optimizations
 
-If we don't actually create a revoker function per proxy (possibly via `new Proxy` and the third argument), this means less memory allocation and less garbage collection pressure.
+If we don't actually create a revoker function per proxy, this means less memory allocation and less garbage collection pressure.
 
 ## Description
 
@@ -113,20 +114,16 @@ There is prior art for passing AbortSignals across Realms.  See issue #1.
 
 **Q**: Why have a third argument?
 
-**A**: We believe this is the simplest way to maintain backwards compatibility and add the feature we are requesting.  The alternative is defining another static maker function on Proxy, which we would prefer not to do.  We are also aware of the importance of shaping this third-argument API correctly up front.
-
-**Q**: Should `new Proxy` get a third argument as well? (#6)
-
-**A**: Yes.  When that third argument is available but missing, the default behavior doesn't change. Since new Proxy doesn't have more than two arguments right now, we should reasonably expect people aren't using a third argument...
+**A**: We believe this is the simplest way to maintain backwards compatibility and add the feature we are requesting.  We are also aware of the importance of shaping this third-argument API correctly up front.
 
 **Q**: What relationship is there to the [Cancellation proposal](https://github.com/tc39/proposal-cancellation) and/or [AbortController](https://developer.mozilla.org/en-US/docs/Web/API/AbortController)? (#13)
 
 **A**: We're certainly willing to adjust our proposal to be compatible with and/or dependent on the Cancellation proposal.  Regarding AbortController, SES believes that making TC39 proposals depend on Web API's is a non-starter, unless AbortController becomes part of ECMAScript (highly unlikely).
 
-In particular, the `RevocationController` is something we can replace with another standard API from TC39.
+In particular, the `Proxy.createSignal()` and `Proxy.finalizeSignal(signal)` methods we can replace with another standard API from TC39.
 
 ### Out of Scope
 
 #### Observing revocation
 
-This proposal is tailored towards allowing creation of revocable groupings of Proxies, a general signaling mechanism has been the subject of debate at TC39 and we believe this proposal serves its own purpose without an observation mechanism. There is no clear reason why signaling could not be added to the proposed APIs here as a follow on. Adding signaling has a variety of concerns such as re-entrancy and compatibility with other host environment features.
+This proposal is tailored towards allowing creation of revocable groupings of Proxies.  A general signaling mechanism has been the subject of debate at TC39 and we believe this proposal serves its own purpose without an observation mechanism. There is no clear reason why signaling could not be added to the proposed APIs here as a follow on. Adding signaling has a variety of concerns such as re-entrancy and compatibility with other host environment features.
