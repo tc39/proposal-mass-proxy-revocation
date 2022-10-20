@@ -13,7 +13,7 @@ Membranes, which use Proxy and WeakMap to separate one object graph (think "Real
 
 We propose the creation and tracking of "revocation signal" symbols, which developers can pass instances into `new Proxy()` or  `Proxy.revocable()` via a *third* argument.  Users could create these signals via a `Proxy.createSignal()` static function, and revoke them via a `Proxy.finalizeSignal(signal)` static function.  (We are aware of the Cancellation proposal and are quite willing to replace this mechanism with an API from that proposal.)
 
-In TypeScript, this would be:
+In TypeScript [(copied from Microsoft's TypeScript project under the Apache license)](https://github.com/microsoft/TypeScript/blob/main/lib/lib.es2015.proxy.d.ts), this would be:
 
 ```typescript
 interface ProxyConstructorOptions {
