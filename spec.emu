@@ -13,94 +13,604 @@ contributors:
   - Jack Works
 </pre>
 
-<emu-clause id="sec-algr">
-  <h1>Algorithm</h1>
-  <emu-clause id="sec-ensure-proxy-alive" type="abstract operation">
-    <h1>
-      EnsureProxyAlive (
-        _object_: a Proxy,
-      ): either a normal completion containing ~unused~ or an abrupt completion
-    </h1>
-    <dl class="header">
-      <dt>description</dt>
-      <dd>It is used make sure the proxy is not revoked.</dd>
-    </dl>
-    <emu-note>
-      <p>This Abstract Operation will replace every
-        <emu-alg>
-          1. Let _handler_ be _O_.[[ProxyHandler]].
-          1. If _handler_ is *null*, throw a *TypeError* exception.
-        </emu-alg>
-        in the Proxy internal slot algorithms.
-      </p>
-      <p>For the simplicity of this proposal spec, it will not included in this spec.</p>
-    </emu-note>
-    <emu-alg>
-      1. If _object_.[[ProxyHandler]] is *null*, throw a TypeError exception.
-      1. If _object_.[[ProxyTarget]] is *null*, throw a TypeError exception.
-      1. If _object_.[[RevocationSignal]] is not *null*, and _object_.[[RevocationSignal]].[[IsRevoked]] is *true*, then
-        1. Set _object_.[[ProxyTarget]] to *null*.
-        1. Set _object_.[[ProxyHandler]] to *null*.
-        1. Set _object_.[[RevocationSignal]] to *null*.
-        1. Throw a TypeError exception.
-      1. Return ~unused~.
-    </emu-alg>
-  </emu-clause>
-  <emu-clause id="sec-get-proxy-signal" type="abstract operation">
-    <h1>
-      GetProxySignal (
-        _object_: unknown,
-      ): either a normal completion containing an ECMAScript language value or an abrupt completion
-    </h1>
-    <dl class="header">
-      <dt>description</dt>
-      <dd>It is used to get the revocation signal of the Proxy.</dd>
-    </dl>
-    <emu-alg>
-      1. If Type(_object_) is not Object, return *undefined*.
-      1. Let _signal_ be ? Get(_object_, "signal").
-      1. If _signal_ is *undefined*, return *undefined*.
-      1. If Type(_signal_) is not Object, throw a TypeError exception.
-      1. If _signal_ does not have a [[HostRevocationSignal]] internal slot, throw a TypeError exception.
-      1. Return _signal_.
-    </emu-alg>
-  </emu-clause>
-  <emu-clause id="sec-proxy.revocable" oldids="sec-proxy-revocation-functions">
-    <h1>Proxy.revocable ( _target_, _handler_, _options_ )</h1>
-    <p>The `Proxy.revocable` function is used to create a revocable Proxy object. When `Proxy.revocable` is called with arguments _target_, _handler_ and _options_, the following steps are taken:</p>
-    <emu-alg>
-      1. Let _p_ be ? ProxyCreate(_target_, _handler_).
-      1. <ins>Let _signal_ be ? GetProxySignal(_options_).</ins>
-      1. <ins>If _signal_ is not *undefined*, then</ins>
-        1. <ins>Let _p_.[[RevocationSignal]] be _signal_.[[HostRevocationSignal]].</ins>
-      1. Let _revokerClosure_ be a new Abstract Closure with no parameters that captures nothing and performs the following steps when called:
-        1. Let _F_ be the active function object.
-        1. Let _p_ be _F_.[[RevocableProxy]].
-        1. If _p_ is *null*, return *undefined*.
-        1. Set _F_.[[RevocableProxy]] to *null*.
-        1. Assert: _p_ is a Proxy object.
-        1. Set _p_.[[ProxyTarget]] to *null*.
-        1. Set _p_.[[ProxyHandler]] to *null*.
-        1. <ins>Set _p_.[[RevocationSignal]] to *null*.</ins>
-        1. Return *undefined*.
-      1. Let _revoker_ be CreateBuiltinFunction(_revokerClosure_, 0, *""*, &laquo; [[RevocableProxy]] &raquo;).
-      1. Set _revoker_.[[RevocableProxy]] to _p_.
-      1. Let _result_ be OrdinaryObjectCreate(%Object.prototype%).
-      1. Perform ! CreateDataPropertyOrThrow(_result_, *"proxy"*, _p_).
-      1. Perform ! CreateDataPropertyOrThrow(_result_, *"revoke"*, _revoker_).
-      1. Return _result_.
-    </emu-alg>
-  </emu-clause>
+<emu-clause id="sec-ordinary-and-exotic-objects-behaviours" number="10">
+  <h1>Ordinary and Exotic Objects Behaviours</h1>
+  <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots" number="5">
+    <h1>Proxy Object Internal Methods and Internal Slots</h1>
+    <p>The [[ProxyHandler]]<ins>, [[ProxyRevokeSignal]]</ins> and [[ProxyTarget]] internal slots of a Proxy object are always initialized when the object is created and typically may not be modified. Some Proxy objects are created in a manner that permits them to be subsequently <em>revoked</em>. When a proxy is revoked, its [[ProxyHandler]]<ins>, [[ProxyRevokeSignal]]</ins> and [[ProxyTarget]] internal slots are set to *null* causing subsequent invocations of internal methods on that Proxy object to throw a *TypeError* exception.</p>
 
-  <emu-clause id="sec-host-integration">
-    <h1>Host integration</h1>
-    <p>The host defined object <a href="https://dom.spec.whatwg.org/#abortsignal">AbortSignal</a> will have a `[[HostRevocationSignal]]` internal slot. This means developers write the following code:</p>
-    <pre><code class="javascript">const controller = new AbortController();
-const proxy = Proxy.revocable(target, handler, { signal: controller.signal });
-controller.abort();
-proxy.hello // throws: Proxy revoked.
-</code></pre>
-    <p>The `[[HostRevocationSignal]]` internal slot on a host object must have a `[[IsRevoked]]` internal slot which contains a *boolean* value.</p>
-    <p>Once `[[IsRevoked]]` becomes *true*, it cannot become *false*.</p>
+    <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots-getprototypeof" type="internal method">
+      <h1>[[GetPrototypeOf]] ( ): either a normal completion containing either an Object or *null*, or a throw completion</h1>
+      <dl class="header">
+        <dt>for</dt>
+        <dd>a Proxy exotic object _O_</dd>
+      </dl>
+      <emu-alg>
+        1. <ins>Perform ? EnsureProxyAlive(_O_)</ins>.
+        1. Let _handler_ be _O_.[[ProxyHandler]].
+        1. <del>If _handler_ is *null*, throw a *TypeError* exception.</del>
+        1. Assert: _handler_ is an Object.
+        1. Let _target_ be _O_.[[ProxyTarget]].
+        1. Let _trap_ be ? GetMethod(_handler_, *"getPrototypeOf"*).
+        1. If _trap_ is *undefined*, then
+          1. Return ? <emu-meta effects="user-code">_target_.[[GetPrototypeOf]]</emu-meta>().
+        1. Let _handlerProto_ be ? Call(_trap_, _handler_, « _target_ »).
+        1. If _handlerProto_ is not an Object and _handlerProto_ is not *null*, throw a *TypeError* exception.
+        1. Let _extensibleTarget_ be ? IsExtensible(_target_).
+        1. If _extensibleTarget_ is *true*, return _handlerProto_.
+        1. Let _targetProto_ be ? <emu-meta effects="user-code">_target_.[[GetPrototypeOf]]</emu-meta>().
+        1. If SameValue(_handlerProto_, _targetProto_) is *false*, throw a *TypeError* exception.
+        1. Return _handlerProto_.
+      </emu-alg>
+    </emu-clause>
+
+    <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots-setprototypeof-v" type="internal method">
+      <h1>
+        [[SetPrototypeOf]] (
+          _V_: an Object or *null*,
+        ): either a normal completion containing a Boolean or a throw completion
+      </h1>
+      <dl class="header">
+        <dt>for</dt>
+        <dd>a Proxy exotic object _O_</dd>
+      </dl>
+      <emu-alg>
+        1. <ins>Perform ? EnsureProxyAlive(_O_)</ins>.
+        1. Let _handler_ be _O_.[[ProxyHandler]].
+        1. <del>If _handler_ is *null*, throw a *TypeError* exception.</del>
+        1. Assert: _handler_ is an Object.
+        1. Let _target_ be _O_.[[ProxyTarget]].
+        1. Let _trap_ be ? GetMethod(_handler_, *"setPrototypeOf"*).
+        1. If _trap_ is *undefined*, then
+          1. Return ? <emu-meta effects="user-code">_target_.[[SetPrototypeOf]]</emu-meta>(_V_).
+        1. Let _booleanTrapResult_ be ToBoolean(? Call(_trap_, _handler_, « _target_, _V_ »)).
+        1. If _booleanTrapResult_ is *false*, return *false*.
+        1. Let _extensibleTarget_ be ? IsExtensible(_target_).
+        1. If _extensibleTarget_ is *true*, return *true*.
+        1. Let _targetProto_ be ? <emu-meta effects="user-code">_target_.[[GetPrototypeOf]]</emu-meta>().
+        1. If SameValue(_V_, _targetProto_) is *false*, throw a *TypeError* exception.
+        1. Return *true*.
+      </emu-alg>
+    </emu-clause>
+
+    <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots-isextensible" type="internal method">
+      <h1>[[IsExtensible]] ( ): either a normal completion containing a Boolean or a throw completion</h1>
+      <dl class="header">
+        <dt>for</dt>
+        <dd>a Proxy exotic object _O_</dd>
+      </dl>
+      <emu-alg>
+        1. <ins>Perform ? EnsureProxyAlive(_O_)</ins>.
+        1. Let _handler_ be _O_.[[ProxyHandler]].
+        1. <del>If _handler_ is *null*, throw a *TypeError* exception.</del>
+        1. Assert: _handler_ is an Object.
+        1. Let _target_ be _O_.[[ProxyTarget]].
+        1. Let _trap_ be ? GetMethod(_handler_, *"isExtensible"*).
+        1. If _trap_ is *undefined*, then
+          1. Return ? IsExtensible(_target_).
+        1. Let _booleanTrapResult_ be ToBoolean(? Call(_trap_, _handler_, « _target_ »)).
+        1. Let _targetResult_ be ? IsExtensible(_target_).
+        1. If SameValue(_booleanTrapResult_, _targetResult_) is *false*, throw a *TypeError* exception.
+        1. Return _booleanTrapResult_.
+      </emu-alg>
+    </emu-clause>
+
+    <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots-preventextensions" type="internal method">
+      <h1>[[PreventExtensions]] ( ): either a normal completion containing a Boolean or a throw completion</h1>
+      <dl class="header">
+        <dt>for</dt>
+        <dd>a Proxy exotic object _O_</dd>
+      </dl>
+      <emu-alg>
+        1. <ins>Perform ? EnsureProxyAlive(_O_)</ins>.
+        1. Let _handler_ be _O_.[[ProxyHandler]].
+        1. <del>If _handler_ is *null*, throw a *TypeError* exception.</del>
+        1. Assert: _handler_ is an Object.
+        1. Let _target_ be _O_.[[ProxyTarget]].
+        1. Let _trap_ be ? GetMethod(_handler_, *"preventExtensions"*).
+        1. If _trap_ is *undefined*, then
+          1. Return ? <emu-meta effects="user-code">_target_.[[PreventExtensions]]()</emu-meta>.
+        1. Let _booleanTrapResult_ be ToBoolean(? Call(_trap_, _handler_, « _target_ »)).
+        1. If _booleanTrapResult_ is *true*, then
+          1. Let _extensibleTarget_ be ? IsExtensible(_target_).
+          1. If _extensibleTarget_ is *true*, throw a *TypeError* exception.
+        1. Return _booleanTrapResult_.
+      </emu-alg>
+    </emu-clause>
+
+    <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots-getownproperty-p" type="internal method">
+      <h1>
+        [[GetOwnProperty]] (
+          _P_: a property key,
+        ): either a normal completion containing either a Property Descriptor or *undefined*, or a throw completion
+      </h1>
+      <dl class="header">
+        <dt>for</dt>
+        <dd>a Proxy exotic object _O_</dd>
+      </dl>
+      <emu-alg>
+        1. <ins>Perform ? EnsureProxyAlive(_O_)</ins>.
+        1. Let _handler_ be _O_.[[ProxyHandler]].
+        1. <del>If _handler_ is *null*, throw a *TypeError* exception.</del>
+        1. Assert: _handler_ is an Object.
+        1. Let _target_ be _O_.[[ProxyTarget]].
+        1. Let _trap_ be ? GetMethod(_handler_, *"getOwnPropertyDescriptor"*).
+        1. If _trap_ is *undefined*, then
+          1. Return ? <emu-meta effects="user-code">_target_.[[GetOwnProperty]]</emu-meta>(_P_).
+        1. Let _trapResultObj_ be ? Call(_trap_, _handler_, « _target_, _P_ »).
+        1. If _trapResultObj_ is not an Object and _trapResultObj_ is not *undefined*, throw a *TypeError* exception.
+        1. Let _targetDesc_ be ? <emu-meta effects="user-code">_target_.[[GetOwnProperty]]</emu-meta>(_P_).
+        1. If _trapResultObj_ is *undefined*, then
+          1. If _targetDesc_ is *undefined*, return *undefined*.
+          1. If _targetDesc_.[[Configurable]] is *false*, throw a *TypeError* exception.
+          1. Let _extensibleTarget_ be ? IsExtensible(_target_).
+          1. If _extensibleTarget_ is *false*, throw a *TypeError* exception.
+          1. Return *undefined*.
+        1. Let _extensibleTarget_ be ? IsExtensible(_target_).
+        1. Let _resultDesc_ be ? ToPropertyDescriptor(_trapResultObj_).
+        1. Perform CompletePropertyDescriptor(_resultDesc_).
+        1. Let _valid_ be IsCompatiblePropertyDescriptor(_extensibleTarget_, _resultDesc_, _targetDesc_).
+        1. If _valid_ is *false*, throw a *TypeError* exception.
+        1. If _resultDesc_.[[Configurable]] is *false*, then
+          1. If _targetDesc_ is *undefined* or _targetDesc_.[[Configurable]] is *true*, then
+            1. Throw a *TypeError* exception.
+          1. If _resultDesc_ has a [[Writable]] field and _resultDesc_.[[Writable]] is *false*, then
+            1. Assert: _targetDesc_ has a [[Writable]] field.
+            1. If _targetDesc_.[[Writable]] is *true*, throw a *TypeError* exception.
+        1. Return _resultDesc_.
+      </emu-alg>
+    </emu-clause>
+
+    <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots-defineownproperty-p-desc" type="internal method">
+      <h1>
+        [[DefineOwnProperty]] (
+          _P_: a property key,
+          _Desc_: a Property Descriptor,
+        ): either a normal completion containing a Boolean or a throw completion
+      </h1>
+      <dl class="header">
+        <dt>for</dt>
+        <dd>a Proxy exotic object _O_</dd>
+      </dl>
+      <emu-alg>
+        1. <ins>Perform ? EnsureProxyAlive(_O_)</ins>.
+        1. Let _handler_ be _O_.[[ProxyHandler]].
+        1. <del>If _handler_ is *null*, throw a *TypeError* exception.</del>
+        1. Assert: _handler_ is an Object.
+        1. Let _target_ be _O_.[[ProxyTarget]].
+        1. Let _trap_ be ? GetMethod(_handler_, *"defineProperty"*).
+        1. If _trap_ is *undefined*, then
+          1. Return ? <emu-meta effects="user-code">_target_.[[DefineOwnProperty]]</emu-meta>(_P_, _Desc_).
+        1. Let _descObj_ be FromPropertyDescriptor(_Desc_).
+        1. Let _booleanTrapResult_ be ToBoolean(? Call(_trap_, _handler_, « _target_, _P_, _descObj_ »)).
+        1. If _booleanTrapResult_ is *false*, return *false*.
+        1. Let _targetDesc_ be ? <emu-meta effects="user-code">_target_.[[GetOwnProperty]]</emu-meta>(_P_).
+        1. Let _extensibleTarget_ be ? IsExtensible(_target_).
+        1. If _Desc_ has a [[Configurable]] field and if _Desc_.[[Configurable]] is *false*, then
+          1. Let _settingConfigFalse_ be *true*.
+        1. Else, let _settingConfigFalse_ be *false*.
+        1. If _targetDesc_ is *undefined*, then
+          1. If _extensibleTarget_ is *false*, throw a *TypeError* exception.
+          1. If _settingConfigFalse_ is *true*, throw a *TypeError* exception.
+        1. Else,
+          1. If IsCompatiblePropertyDescriptor(_extensibleTarget_, _Desc_, _targetDesc_) is *false*, throw a *TypeError* exception.
+          1. If _settingConfigFalse_ is *true* and _targetDesc_.[[Configurable]] is *true*, throw a *TypeError* exception.
+          1. If IsDataDescriptor(_targetDesc_) is *true*, _targetDesc_.[[Configurable]] is *false*, and _targetDesc_.[[Writable]] is *true*, then
+            1. If _Desc_ has a [[Writable]] field and _Desc_.[[Writable]] is *false*, throw a *TypeError* exception.
+        1. Return *true*.
+      </emu-alg>
+    </emu-clause>
+
+    <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots-hasproperty-p" type="internal method">
+      <h1>
+        [[HasProperty]] (
+          _P_: a property key,
+        ): either a normal completion containing a Boolean or a throw completion
+      </h1>
+      <dl class="header">
+        <dt>for</dt>
+        <dd>a Proxy exotic object _O_</dd>
+      </dl>
+      <emu-alg>
+        1. <ins>Perform ? EnsureProxyAlive(_O_)</ins>.
+        1. Let _handler_ be _O_.[[ProxyHandler]].
+        1. <del>If _handler_ is *null*, throw a *TypeError* exception.</del>
+        1. Assert: _handler_ is an Object.
+        1. Let _target_ be _O_.[[ProxyTarget]].
+        1. Let _trap_ be ? GetMethod(_handler_, *"has"*).
+        1. If _trap_ is *undefined*, then
+          1. Return ? <emu-meta effects="user-code">_target_.[[HasProperty]]</emu-meta>(_P_).
+        1. Let _booleanTrapResult_ be ToBoolean(? Call(_trap_, _handler_, « _target_, _P_ »)).
+        1. If _booleanTrapResult_ is *false*, then
+          1. Let _targetDesc_ be ? <emu-meta effects="user-code">_target_.[[GetOwnProperty]]</emu-meta>(_P_).
+          1. If _targetDesc_ is not *undefined*, then
+            1. If _targetDesc_.[[Configurable]] is *false*, throw a *TypeError* exception.
+            1. Let _extensibleTarget_ be ? IsExtensible(_target_).
+            1. If _extensibleTarget_ is *false*, throw a *TypeError* exception.
+        1. Return _booleanTrapResult_.
+      </emu-alg>
+    </emu-clause>
+
+    <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots-get-p-receiver" type="internal method">
+      <h1>
+        [[Get]] (
+          _P_: a property key,
+          _Receiver_: an ECMAScript language value,
+        ): either a normal completion containing an ECMAScript language value or a throw completion
+      </h1>
+      <dl class="header">
+        <dt>for</dt>
+        <dd>a Proxy exotic object _O_</dd>
+      </dl>
+      <emu-alg>
+        1. <ins>Perform ? EnsureProxyAlive(_O_)</ins>.
+        1. Let _handler_ be _O_.[[ProxyHandler]].
+        1. <del>If _handler_ is *null*, throw a *TypeError* exception.</del>
+        1. Assert: _handler_ is an Object.
+        1. Let _target_ be _O_.[[ProxyTarget]].
+        1. Let _trap_ be ? GetMethod(_handler_, *"get"*).
+        1. If _trap_ is *undefined*, then
+          1. Return ? <emu-meta effects="user-code">_target_.[[Get]]</emu-meta>(_P_, _Receiver_).
+        1. Let _trapResult_ be ? Call(_trap_, _handler_, « _target_, _P_, _Receiver_ »).
+        1. Let _targetDesc_ be ? <emu-meta effects="user-code">_target_.[[GetOwnProperty]]</emu-meta>(_P_).
+        1. If _targetDesc_ is not *undefined* and _targetDesc_.[[Configurable]] is *false*, then
+          1. If IsDataDescriptor(_targetDesc_) is *true* and _targetDesc_.[[Writable]] is *false*, then
+            1. If SameValue(_trapResult_, _targetDesc_.[[Value]]) is *false*, throw a *TypeError* exception.
+          1. If IsAccessorDescriptor(_targetDesc_) is *true* and _targetDesc_.[[Get]] is *undefined*, then
+            1. If _trapResult_ is not *undefined*, throw a *TypeError* exception.
+        1. Return _trapResult_.
+      </emu-alg>
+    </emu-clause>
+
+    <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots-set-p-v-receiver" type="internal method">
+      <h1>
+        [[Set]] (
+          _P_: a property key,
+          _V_: an ECMAScript language value,
+          _Receiver_: an ECMAScript language value,
+        ): either a normal completion containing a Boolean or a throw completion
+      </h1>
+      <dl class="header">
+        <dt>for</dt>
+        <dd>a Proxy exotic object _O_</dd>
+      </dl>
+      <emu-alg>
+        1. <ins>Perform ? EnsureProxyAlive(_O_)</ins>.
+        1. Let _handler_ be _O_.[[ProxyHandler]].
+        1. <del>If _handler_ is *null*, throw a *TypeError* exception.</del>
+        1. Assert: _handler_ is an Object.
+        1. Let _target_ be _O_.[[ProxyTarget]].
+        1. Let _trap_ be ? GetMethod(_handler_, *"set"*).
+        1. If _trap_ is *undefined*, then
+          1. Return ? <emu-meta effects="user-code">_target_.[[Set]]</emu-meta>(_P_, _V_, _Receiver_).
+        1. Let _booleanTrapResult_ be ToBoolean(? Call(_trap_, _handler_, « _target_, _P_, _V_, _Receiver_ »)).
+        1. If _booleanTrapResult_ is *false*, return *false*.
+        1. Let _targetDesc_ be ? <emu-meta effects="user-code">_target_.[[GetOwnProperty]]</emu-meta>(_P_).
+        1. If _targetDesc_ is not *undefined* and _targetDesc_.[[Configurable]] is *false*, then
+          1. If IsDataDescriptor(_targetDesc_) is *true* and _targetDesc_.[[Writable]] is *false*, then
+            1. If SameValue(_V_, _targetDesc_.[[Value]]) is *false*, throw a *TypeError* exception.
+          1. If IsAccessorDescriptor(_targetDesc_) is *true*, then
+            1. If _targetDesc_.[[Set]] is *undefined*, throw a *TypeError* exception.
+        1. Return *true*.
+      </emu-alg>
+    </emu-clause>
+
+    <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots-delete-p" type="internal method">
+      <h1>
+        [[Delete]] (
+          _P_: a property key,
+        ): either a normal completion containing a Boolean or a throw completion
+      </h1>
+      <dl class="header">
+        <dt>for</dt>
+        <dd>a Proxy exotic object _O_</dd>
+      </dl>
+      <emu-alg>
+        1. <ins>Perform ? EnsureProxyAlive(_O_)</ins>.
+        1. Let _handler_ be _O_.[[ProxyHandler]].
+        1. <del>If _handler_ is *null*, throw a *TypeError* exception.</del>
+        1. Assert: _handler_ is an Object.
+        1. Let _target_ be _O_.[[ProxyTarget]].
+        1. Let _trap_ be ? GetMethod(_handler_, *"deleteProperty"*).
+        1. If _trap_ is *undefined*, then
+          1. Return ? <emu-meta effects="user-code">_target_.[[Delete]]</emu-meta>(_P_).
+        1. Let _booleanTrapResult_ be ToBoolean(? Call(_trap_, _handler_, « _target_, _P_ »)).
+        1. If _booleanTrapResult_ is *false*, return *false*.
+        1. Let _targetDesc_ be ? <emu-meta effects="user-code">_target_.[[GetOwnProperty]]</emu-meta>(_P_).
+        1. If _targetDesc_ is *undefined*, return *true*.
+        1. If _targetDesc_.[[Configurable]] is *false*, throw a *TypeError* exception.
+        1. Let _extensibleTarget_ be ? IsExtensible(_target_).
+        1. If _extensibleTarget_ is *false*, throw a *TypeError* exception.
+        1. Return *true*.
+      </emu-alg>
+    </emu-clause>
+
+    <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots-ownpropertykeys" type="internal method">
+      <h1>[[OwnPropertyKeys]] ( ): either a normal completion containing a List of property keys or a throw completion</h1>
+      <dl class="header">
+        <dt>for</dt>
+        <dd>a Proxy exotic object _O_</dd>
+      </dl>
+      <emu-alg>
+        1. <ins>Perform ? EnsureProxyAlive(_O_)</ins>.
+        1. Let _handler_ be _O_.[[ProxyHandler]].
+        1. <del>If _handler_ is *null*, throw a *TypeError* exception.</del>
+        1. Assert: _handler_ is an Object.
+        1. Let _target_ be _O_.[[ProxyTarget]].
+        1. Let _trap_ be ? GetMethod(_handler_, *"ownKeys"*).
+        1. If _trap_ is *undefined*, then
+          1. Return ? <emu-meta effects="user-code">_target_.[[OwnPropertyKeys]]()</emu-meta>.
+        1. Let _trapResultArray_ be ? Call(_trap_, _handler_, « _target_ »).
+        1. Let _trapResult_ be ? CreateListFromArrayLike(_trapResultArray_, « String, Symbol »).
+        1. If _trapResult_ contains any duplicate entries, throw a *TypeError* exception.
+        1. Let _extensibleTarget_ be ? IsExtensible(_target_).
+        1. Let _targetKeys_ be ? <emu-meta effects="user-code">_target_.[[OwnPropertyKeys]]()</emu-meta>.
+        1. Assert: _targetKeys_ is a List of property keys.
+        1. Assert: _targetKeys_ contains no duplicate entries.
+        1. Let _targetConfigurableKeys_ be a new empty List.
+        1. Let _targetNonconfigurableKeys_ be a new empty List.
+        1. For each element _key_ of _targetKeys_, do
+          1. Let _desc_ be ? <emu-meta effects="user-code">_target_.[[GetOwnProperty]]</emu-meta>(_key_).
+          1. If _desc_ is not *undefined* and _desc_.[[Configurable]] is *false*, then
+            1. Append _key_ as an element of _targetNonconfigurableKeys_.
+          1. Else,
+            1. Append _key_ as an element of _targetConfigurableKeys_.
+        1. If _extensibleTarget_ is *true* and _targetNonconfigurableKeys_ is empty, then
+          1. Return _trapResult_.
+        1. Let _uncheckedResultKeys_ be a List whose elements are the elements of _trapResult_.
+        1. For each element _key_ of _targetNonconfigurableKeys_, do
+          1. If _key_ is not an element of _uncheckedResultKeys_, throw a *TypeError* exception.
+          1. Remove _key_ from _uncheckedResultKeys_.
+        1. If _extensibleTarget_ is *true*, return _trapResult_.
+        1. For each element _key_ of _targetConfigurableKeys_, do
+          1. If _key_ is not an element of _uncheckedResultKeys_, throw a *TypeError* exception.
+          1. Remove _key_ from _uncheckedResultKeys_.
+        1. If _uncheckedResultKeys_ is not empty, throw a *TypeError* exception.
+        1. Return _trapResult_.
+      </emu-alg>
+    </emu-clause>
+
+    <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots-call-thisargument-argumentslist" type="internal method">
+      <h1>
+        [[Call]] (
+          _thisArgument_: an ECMAScript language value,
+          _argumentsList_: a List of ECMAScript language values,
+        ): either a normal completion containing an ECMAScript language value or a throw completion
+      </h1>
+      <dl class="header">
+        <dt>for</dt>
+        <dd>a Proxy exotic object _O_</dd>
+      </dl>
+      <emu-alg>
+        1. <ins>Perform ? EnsureProxyAlive(_O_)</ins>.
+        1. Let _handler_ be _O_.[[ProxyHandler]].
+        1. <del>If _handler_ is *null*, throw a *TypeError* exception.</del>
+        1. Assert: _handler_ is an Object.
+        1. Let _target_ be _O_.[[ProxyTarget]].
+        1. Let _trap_ be ? GetMethod(_handler_, *"apply"*).
+        1. If _trap_ is *undefined*, then
+          1. Return ? Call(_target_, _thisArgument_, _argumentsList_).
+        1. Let _argArray_ be CreateArrayFromList(_argumentsList_).
+        1. Return ? Call(_trap_, _handler_, « _target_, _thisArgument_, _argArray_ »).
+      </emu-alg>
+    </emu-clause>
+
+    <emu-clause id="sec-proxy-object-internal-methods-and-internal-slots-construct-argumentslist-newtarget" type="internal method">
+      <h1>
+        [[Construct]] (
+          _argumentsList_: a List of ECMAScript language values,
+          _newTarget_: a constructor,
+        ): either a normal completion containing an Object or a throw completion
+      </h1>
+      <dl class="header">
+        <dt>for</dt>
+        <dd>a Proxy exotic object _O_</dd>
+      </dl>
+      <emu-alg>
+        1. <ins>Perform ? EnsureProxyAlive(_O_)</ins>.
+        1. Let _handler_ be _O_.[[ProxyHandler]].
+        1. <del>If _handler_ is *null*, throw a *TypeError* exception.</del>
+        1. Assert: _handler_ is an Object.
+        1. Let _target_ be _O_.[[ProxyTarget]].
+        1. Assert: IsConstructor(_target_) is *true*.
+        1. Let _trap_ be ? GetMethod(_handler_, *"construct"*).
+        1. If _trap_ is *undefined*, then
+          1. Return ? Construct(_target_, _argumentsList_, _newTarget_).
+        1. Let _argArray_ be CreateArrayFromList(_argumentsList_).
+        1. Let _newObj_ be ? Call(_trap_, _handler_, « _target_, _argArray_, _newTarget_ »).
+        1. If _newObj_ is not an Object, throw a *TypeError* exception.
+        1. Return _newObj_.
+      </emu-alg>
+    </emu-clause>
+
+    <emu-clause id="sec-proxycreate" type="abstract operation">
+      <h1>
+        ProxyCreate (
+          _target_: an ECMAScript language value,
+          _handler_: an ECMAScript language value,
+          <ins>_options_: an ECMAScript language value,</ins>
+        ): either a normal completion containing a Proxy exotic object or a throw completion
+      </h1>
+      <dl class="header">
+        <dt>description</dt>
+        <dd>It is used to specify the creation of new Proxy objects.</dd>
+      </dl>
+      <emu-alg>
+        1. If _target_ is not an Object, throw a *TypeError* exception.
+        1. If _handler_ is not an Object, throw a *TypeError* exception.
+        1. <ins>Let _revokeSignal_ be *null*.</ins>
+        1. <ins>If _options_ is an Object, then</ins>
+          1. <ins>Let _signal_ be ? Get(_options_, "signal").</ins>
+          1. <ins>If _signal_ is a Symbol, then</ins>
+            1. <ins>Let _found_ be *false*.</ins>
+            1. <ins>For each element _e_ of the GlobalProxySignalRegistry List, do</ins>
+              1. <ins>If SameValue(_e_.[[Symbol]], _signal_) is *true*, then</ins>
+                1. <ins>Set _found_ to *true*.</ins>
+                1. <ins>If _e_.[[Revoked]] is *true*, then</ins>
+                  1. <ins>Throw a *TypeError* exception.</ins>
+                1. <ins>Set _revokeSignal_ to _signal_.</ins>
+            1. <ins>If _found_ is *false*, throw a *TypeError* exception.</ins>
+          1. <ins>Else, throw a *TypeError* exception.</ins>
+        1. <ins>Else if _options_ is not *undefined*, then</ins>
+          1. <ins>Throw a *TypeError* exception.</ins>
+        1. Let _P_ be MakeBasicObject(« [[ProxyHandler]], [[ProxyTarget]], [[ProxyRevokeSignal]] »).
+        1. Set _P_'s essential internal methods, except for [[Call]] and [[Construct]], to the definitions specified in <emu-xref href="#sec-proxy-object-internal-methods-and-internal-slots"></emu-xref>.
+        1. If IsCallable(_target_) is *true*, then
+          1. Set _P_.[[Call]] as specified in <emu-xref href="#sec-proxy-object-internal-methods-and-internal-slots-call-thisargument-argumentslist"></emu-xref>.
+          1. If IsConstructor(_target_) is *true*, then
+            1. Set _P_.[[Construct]] as specified in <emu-xref href="#sec-proxy-object-internal-methods-and-internal-slots-construct-argumentslist-newtarget"></emu-xref>.
+        1. Set _P_.[[ProxyTarget]] to _target_.
+        1. Set _P_.[[ProxyHandler]] to _handler_.
+        1. Return _P_.
+      </emu-alg>
+    </emu-clause>
+    <emu-clause id="sec-ensure-proxy-alive" type="abstract operation">
+      <h1>
+        <ins>
+          EnsureProxyAlive (
+            _object_: a Proxy,
+          ): either a normal completion containing ~unused~ or an abrupt completion
+        </ins>
+      </h1>
+      <dl class="header">
+        <dt>description</dt>
+        <dd>It is used make sure the proxy is not revoked.</dd>
+      </dl>
+      <emu-alg>
+        1. If _object_.[[ProxyHandler]] is *null*, throw a *TypeError* exception.
+        1. If _object_.[[ProxyTarget]] is *null*, throw a *TypeError* exception.
+        1. If _object_.[[ProxyRevokeSignal]] is not *null*, then
+          1. For each element _e_ of the GlobalProxySignalRegistry List, do
+            1. If SameValue(_e_.[[Symbol]], _object_.[[ProxyRevokeSignal]]) is *true* and _e_.[[Revoked]] is *true*, then
+              1. Set _object_.[[ProxyTarget]] to *null*.
+              1. Set _object_.[[ProxyHandler]] to *null*.
+              1. Set _object_.[[ProxyRevokeSignal]] to *null*.
+              1. Throw a *TypeError* exception.
+        1. Return ~unused~.
+      </emu-alg>
+    </emu-clause>
+  </emu-clause>
+</emu-clause>
+<emu-clause id="sec-reflect" number="28">
+  <h1>Reflection</h1>
+
+  <emu-clause id="sec-proxy-objects" number="2">
+    <h1>Proxy Objects</h1>
+
+    <emu-clause id="sec-proxy-constructor">
+      <h1>The Proxy Constructor</h1>
+      <p>The Proxy constructor:</p>
+      <ul>
+        <li>is <dfn>%Proxy%</dfn>.</li>
+        <li>is the initial value of the *"Proxy"* property of the global object.</li>
+        <li>creates and initializes a new Proxy object when called as a constructor.</li>
+        <li>is not intended to be called as a function and will throw an exception when called in that manner.</li>
+      </ul>
+
+      <emu-clause id="sec-proxy-target-handler">
+        <h1>Proxy ( _target_, _handler_<ins>, _options_</ins> )</h1>
+        <p>This function performs the following steps when called:</p>
+        <emu-alg>
+          1. If NewTarget is *undefined*, throw a *TypeError* exception.
+          1. Return ? ProxyCreate(_target_, _handler_<ins>, _options_</ins>).
+        </emu-alg>
+      </emu-clause>
+    </emu-clause>
+
+    <emu-clause id="sec-properties-of-the-proxy-constructor">
+      <h1>Properties of the Proxy Constructor</h1>
+      <p>The Proxy constructor:</p>
+      <ul>
+        <li>has a [[Prototype]] internal slot whose value is %Function.prototype%.</li>
+        <li>does not have a *"prototype"* property because Proxy objects do not have a [[Prototype]] internal slot that requires initialization.</li>
+        <li>has the following properties:</li>
+      </ul>
+
+      <emu-clause id="sec-proxy.revocable" oldids="sec-proxy-revocation-functions">
+        <h1>Proxy.revocable ( _target_, _handler_<ins>, _options_</ins> )</h1>
+        <p>This function creates a revocable Proxy object.</p>
+        <p>It performs the following steps when called:</p>
+        <emu-alg>
+          1. Let _p_ be ? ProxyCreate(_target_, _handler_<ins>, _options_</ins>).
+          1. Let _revokerClosure_ be a new Abstract Closure with no parameters that captures nothing and performs the following steps when called:
+            1. Let _F_ be the active function object.
+            1. Let _p_ be _F_.[[RevocableProxy]].
+            1. If _p_ is *null*, return *undefined*.
+            1. Set _F_.[[RevocableProxy]] to *null*.
+            1. Assert: _p_ is a Proxy object.
+            1. Set _p_.[[ProxyTarget]] to *null*.
+            1. Set _p_.[[ProxyHandler]] to *null*.
+            1. Return *undefined*.
+          1. Let _revoker_ be CreateBuiltinFunction(_revokerClosure_, 0, *""*, « [[RevocableProxy]] »).
+          1. Set _revoker_.[[RevocableProxy]] to _p_.
+          1. Let _result_ be OrdinaryObjectCreate(%Object.prototype%).
+          1. Perform ! CreateDataPropertyOrThrow(_result_, *"proxy"*, _p_).
+          1. Perform ! CreateDataPropertyOrThrow(_result_, *"revoke"*, _revoker_).
+          1. Return _result_.
+        </emu-alg>
+      </emu-clause>
+      <emu-clause id="sec-proxy.createsignal">
+        <h1><ins>Proxy.createSignal ( )</ins></h1>
+        <p>This function creates a symbol that can be used to revoke Proxies.</p>
+        <p>It performs the following steps when called:</p>
+        <emu-alg>
+          1. Let _symbol_ be a new unique Symbol value whose [[Description]] value is *undefined*.
+          1. Append the Record { [[Symbol]]: _symbol_, [[Revoked]]: *false* } to the GlobalProxySignalRegistry List.
+          1. Return _symbol_.
+        </emu-alg>
+        <p>The <dfn>GlobalProxySignalRegistry</dfn> is a List that is globally available. It is shared by all realms. Prior to the evaluation of any ECMAScript code, it is initialized as a new empty List. Elements of the GlobalProxySignalRegistry are Records with the structure defined in Table 1.</p>
+
+        <emu-table id="table-globalproxysignalregistry-record-fields" caption="GlobalProxySignalRegistry Record Fields">
+          <table>
+            <tbody>
+              <tr>
+                <th>
+                  Field Name
+                </th>
+                <th>
+                  Value
+                </th>
+                <th>
+                  Usage
+                </th>
+              </tr>
+              <tr>
+                <td>
+                  [[Symbol]]
+                </td>
+                <td>
+                  a Symbol
+                </td>
+                <td>
+                  A symbol key used to revoke a Proxy across any Realm.
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  [[Revoked]]
+                </td>
+                <td>
+                  a Boolean
+                </td>
+                <td>
+                  A boolean that indicate if this signal is revoked.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </emu-table>
+      </emu-clause>
+      <emu-clause id="sec-proxy.finalizeSignal">
+        <h1><ins>Proxy.finalizeSignal ( _signal_ )</ins></h1>
+        <p>This function revoke all Proxied that [[ProxyRevokeSignal]] is _signal_.</p>
+        <p>It performs the following steps when called:</p>
+        <emu-alg>
+          1. For each element _e_ of the GlobalProxySignalRegistry List, do
+            1. If SameValue(_e_.[[Symbol]], _signal_) is *true*, then
+              1. Set _e_.[[Revoked]] to *true*.
+          1. Return *undefined*.
+        </emu-alg>
+      </emu-clause>
+    </emu-clause>
   </emu-clause>
 </emu-clause>
