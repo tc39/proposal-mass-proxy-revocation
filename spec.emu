@@ -462,6 +462,10 @@ contributors:
             1. Set _P_.[[Construct]] as specified in <emu-xref href="#sec-proxy-object-internal-methods-and-internal-slots-construct-argumentslist-newtarget"></emu-xref>.
         1. Set _P_.[[ProxyTarget]] to _target_.
         1. Set _P_.[[ProxyHandler]] to _handler_.
+        1. <ins>If _signal_ is a Symbol, then</ins>
+          1. <ins>Set _P_.[[ProxyRevokeSignal]] to _signal_.</ins>
+        1. <ins>Else,</ins>
+          1. <ins>Set _P_.[[ProxyRevokeSignal]] to *null*.</ins>
         1. Return _P_.
       </emu-alg>
     </emu-clause>
