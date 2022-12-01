@@ -450,7 +450,8 @@ contributors:
                   1. <ins>Throw a *TypeError* exception.</ins>
                 1. <ins>Set _revokeSignal_ to _signal_.</ins>
             1. <ins>If _found_ is *false*, throw a *TypeError* exception.</ins>
-          1. <ins>Else, throw a *TypeError* exception.</ins>
+          1. <ins>Else if _signal_ is not *undefined*, then</ins>
+            1. <ins>Throw a *TypeError* exception.</ins>
         1. <ins>Else if _options_ is not *undefined*, then</ins>
           1. <ins>Throw a *TypeError* exception.</ins>
         1. Let _P_ be MakeBasicObject(« [[ProxyHandler]], [[ProxyTarget]], [[ProxyRevokeSignal]] »).
@@ -461,6 +462,7 @@ contributors:
             1. Set _P_.[[Construct]] as specified in <emu-xref href="#sec-proxy-object-internal-methods-and-internal-slots-construct-argumentslist-newtarget"></emu-xref>.
         1. Set _P_.[[ProxyTarget]] to _target_.
         1. Set _P_.[[ProxyHandler]] to _handler_.
+        1. <ins>Set _P_.[[ProxyRevokeSignal]] to _revokeSignal_.</ins>
         1. Return _P_.
       </emu-alg>
     </emu-clause>
