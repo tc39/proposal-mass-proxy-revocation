@@ -17,7 +17,7 @@ In TypeScript [(copied from Microsoft's TypeScript project under the Apache lice
 
 ```typescript
 interface ProxyConstructorOptions {
-  signal: symbol;
+  signal?: symbol;
 }
 
 interface ProxyConstructor {
